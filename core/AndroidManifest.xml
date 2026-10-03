@@ -21,7 +21,7 @@
 
     <application
         android:label="Remote Core"
-        android:icon="@android:drawable/stat_sys_data_bluetooth"
+        android:icon="@drawable/ic_core"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
         <activity
