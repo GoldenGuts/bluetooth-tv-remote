@@ -4,6 +4,7 @@
 #   install: also installs with adb. Install core FIRST: it defines the permission the remote needs.
 #   aab:     builds core/core.aab and remote/remote.aab for Google Play. Needs BUNDLETOOL (jar path),
 #            UPLOAD_KEYSTORE and UPLOAD_PASSWORD (alias "upload").
+#   With UPLOAD_KEYSTORE set, APKs are signed with the upload key too (GitHub releases).
 # Reinstalling core restarts the Bluetooth link: the TV may need a new pairing. Reinstall remote freely.
 set -e
 cd "$(dirname "$0")"
@@ -43,7 +44,13 @@ apk() {
     compile "$1"
     (cd "$out" && zip -q unsigned.apk classes.dex)
     "$BT/zipalign" -f -p 4 "$out/unsigned.apk" "$out/aligned.apk"
-    "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android --out "$1/$1.apk" "$out/aligned.apk"
+    # With UPLOAD_KEYSTORE set, the APK is signed with the registered upload key (for GitHub releases).
+    if [ -n "$UPLOAD_KEYSTORE" ]; then
+        "$BT/apksigner" sign --ks "$UPLOAD_KEYSTORE" --ks-key-alias upload --ks-pass env:UPLOAD_PASSWORD \
+            --out "$1/$1.apk" "$out/aligned.apk"
+    else
+        "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android --out "$1/$1.apk" "$out/aligned.apk"
+    fi
     echo "built $1/$1.apk"
     if [ "$2" = install ]; then adb install -r "$1/$1.apk"; fi
 }
