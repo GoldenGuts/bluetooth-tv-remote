@@ -35,6 +35,10 @@ Needs the Android SDK (platform 36, build-tools 36.1.0) and a JDK. No Gradle.
 remote/test/run.sh        # gesture engine tests
 ```
 
+## Support
+
+The app is free and has no ads. If it helps you: [sponsor on GitHub](https://github.com/sponsors/GoldenGuts).
+
 ## License
 
 GPL-3.0

@@ -859,6 +859,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         ui.link("Settings", null, this::openSettings);
         ui.link("Pairing help", null, this::pairingHelp);
         ui.link("Remote Core", "The Bluetooth link app", core::openCoreApp);
+        ui.link("Support the app ♥", "Free and open source. Sponsor on GitHub", this::openSponsor);
         ui.link("Connection log", null, () -> new AlertDialog.Builder(this, Cards.DIALOG_THEME)
                 .setTitle("Connection log")
                 .setMessage(coreLog.isEmpty() ? "No log yet" : coreLog)
@@ -871,6 +872,17 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
     }
 
     private String coreLog = "";
+
+    /** The browser opens the page: the app itself has no internet permission. */
+    private void openSponsor() {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(SPONSOR_URL)));
+        } catch (RuntimeException e) {
+            label("no browser found");
+        }
+    }
+
+    private static final String SPONSOR_URL = "https://github.com/sponsors/GoldenGuts";
 
     private void inputDialog() {
         String[] steps = {"Open the input list", "Next input", "2 inputs on", "3 inputs on"};
