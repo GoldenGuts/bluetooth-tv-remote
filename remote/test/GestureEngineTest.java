@@ -1,7 +1,7 @@
-import io.github.goldenguts.bttvremote.gesture.GestureConfig;
-import io.github.goldenguts.bttvremote.gesture.GestureEngine;
-import io.github.goldenguts.bttvremote.gesture.GestureEngine.Action;
-import io.github.goldenguts.bttvremote.gesture.GestureEngine.Cue;
+import in.weenja.bttvremote.gesture.GestureConfig;
+import in.weenja.bttvremote.gesture.GestureEngine;
+import in.weenja.bttvremote.gesture.GestureEngine.Action;
+import in.weenja.bttvremote.gesture.GestureEngine.Cue;
 
 import java.util.ArrayList;
 import java.util.List;

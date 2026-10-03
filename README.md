@@ -26,11 +26,12 @@ Updates of the remote app keep the pairing. A restart of Remote Core can need a 
 
 ## Build
 
-Needs the Android SDK (platform 35, build-tools 35) and a JDK. No Gradle.
+Needs the Android SDK (platform 36, build-tools 36.1.0) and a JDK. No Gradle.
 
 ```sh
 ./build.sh all            # core/core.apk and remote/remote.apk
 ./build.sh all install    # also installs with adb
+./build.sh all aab        # Play bundles (see build.sh for the signing variables)
 remote/test/run.sh        # gesture engine tests
 ```
 

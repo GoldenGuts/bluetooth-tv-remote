@@ -6,7 +6,7 @@ OUT=test/out/classes
 rm -rf "$OUT"
 mkdir -p "$OUT"
 javac -source 11 -target 11 -Xlint:-options -d "$OUT" \
-    src/io/github/goldenguts/bttvremote/gesture/GestureConfig.java \
-    src/io/github/goldenguts/bttvremote/gesture/GestureEngine.java \
+    src/in/weenja/bttvremote/gesture/GestureConfig.java \
+    src/in/weenja/bttvremote/gesture/GestureEngine.java \
     test/GestureEngineTest.java
 java -cp "$OUT" GestureEngineTest

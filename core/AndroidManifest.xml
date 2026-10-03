@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="io.github.goldenguts.bttvremote.core"
+    package="in.weenja.bttvremote.core"
     android:versionCode="1"
     android:versionName="1.0">
 
-    <uses-sdk android:minSdkVersion="33" android:targetSdkVersion="35" />
+    <uses-sdk android:minSdkVersion="33" android:targetSdkVersion="36" />
 
     <!-- Only apps signed with the same key (TV Remote) may send keys. -->
     <permission
-        android:name="io.github.goldenguts.bttvremote.permission.CONTROL"
+        android:name="in.weenja.bttvremote.permission.CONTROL"
         android:protectionLevel="signature" />
 
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
@@ -37,7 +37,7 @@
         <activity
             android:name=".StartActivity"
             android:exported="true"
-            android:permission="io.github.goldenguts.bttvremote.permission.CONTROL"
+            android:permission="in.weenja.bttvremote.permission.CONTROL"
             android:showWhenLocked="true"
             android:excludeFromRecents="true"
             android:noHistory="true"
@@ -61,7 +61,7 @@
         <service
             android:name=".CoreService"
             android:exported="true"
-            android:permission="io.github.goldenguts.bttvremote.permission.CONTROL"
+            android:permission="in.weenja.bttvremote.permission.CONTROL"
             android:foregroundServiceType="connectedDevice" />
 
         <receiver

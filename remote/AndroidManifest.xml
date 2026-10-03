@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="io.github.goldenguts.bttvremote"
+    package="in.weenja.bttvremote"
     android:versionCode="1"
     android:versionName="1.0">
 
-    <uses-sdk android:minSdkVersion="33" android:targetSdkVersion="35" />
+    <uses-sdk android:minSdkVersion="33" android:targetSdkVersion="36" />
 
     <!-- Defined by Remote Core (same signing key). Install Remote Core first. -->
-    <uses-permission android:name="io.github.goldenguts.bttvremote.permission.CONTROL" />
+    <uses-permission android:name="in.weenja.bttvremote.permission.CONTROL" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <queries>
-        <package android:name="io.github.goldenguts.bttvremote.core" />
+        <package android:name="in.weenja.bttvremote.core" />
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
         </intent>

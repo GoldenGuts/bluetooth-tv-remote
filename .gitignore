@@ -5,3 +5,4 @@ out/
 *.keystore
 *.jks
 .DS_Store
+*.aab
