@@ -1,0 +1,7 @@
+gen/
+out/
+*.apk
+*.idsig
+*.keystore
+*.jks
+.DS_Store

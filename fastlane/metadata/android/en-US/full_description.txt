@@ -1,0 +1,19 @@
+Control your TV with your phone without looking at it.
+
+The phone connects to the TV as a Bluetooth keyboard, so the TV does not need Wi-Fi or an app.
+
+• Drag anywhere for the arrows, with a tick for each step
+• Tap for OK, swipe in from the edge for Back
+• Hold, then slide for Home, Input, Mute or Settings; lift for Play/Pause
+• Hold, then twist your wrist to seek
+• A different vibration for each action
+• Volume keys control the TV
+• Type and speak text into TV search boxes
+• Works over the lock screen and on the Galaxy Flip cover screen
+• Interactive tutorial and adjustable gestures
+
+Needs the companion app "Remote Core", which keeps the Bluetooth link.
+
+Tested with LG webOS TVs. Android TV, Google TV and Fire TV are supported but not tested yet.
+
+Free and open source (GPL-3.0).
