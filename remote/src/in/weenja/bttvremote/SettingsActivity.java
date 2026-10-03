@@ -1,5 +1,7 @@
 package in.weenja.bttvremote;
 
+import in.weenja.bttvremote.common.Cards;
+
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;

@@ -24,6 +24,16 @@ Two apps: **Remote Core** keeps the Bluetooth link, **Bluetooth TV Remote** is t
 
 Updates of the remote app keep the pairing. A restart of Remote Core can need a new pairing.
 
+## Why two apps
+
+The TV pairs with a Bluetooth keyboard and remembers where its keys are (the GATT attribute handles).
+When the app that holds the Bluetooth link restarts, Android gives that keyboard new handles. Some TVs
+(tested: LG webOS) do not look again, so the keys stop working until you delete the pairing and pair again.
+
+An app update always restarts the app. So the link lives in its own small app, **Remote Core**, which
+rarely changes. All gestures, screens and settings live in **Bluetooth TV Remote**, which can update
+often without touching the pairing. A crash in the remote screens cannot break the link either.
+
 ## Build
 
 Needs the Android SDK (platform 36, build-tools 36.1.0) and a JDK. No Gradle.

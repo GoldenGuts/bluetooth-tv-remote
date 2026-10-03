@@ -1,4 +1,4 @@
-package in.weenja.bttvremote;
+package in.weenja.bttvremote.common;
 
 import android.content.Context;
 import android.content.res.ColorStateList;
@@ -18,23 +18,23 @@ import android.widget.Switch;
 import android.widget.TextView;
 
 /** The calm card style of the settings and the extras panel: grouped rounded cards on black, one accent. */
-final class Cards {
+public final class Cards {
 
-    static final int BACKGROUND = Color.BLACK;
-    static final int CARD = Color.rgb(23, 24, 28);
-    static final int DIVIDER = Color.rgb(38, 39, 44);
-    static final int PILL = Color.rgb(36, 37, 42);
-    static final int TEXT = Color.rgb(236, 236, 240);
-    static final int SUBTEXT = Color.rgb(140, 142, 150);
-    static final int ACCENT = Color.rgb(138, 180, 248);
-    static final int DANGER = Color.rgb(240, 120, 110);
-    static final int DIALOG_THEME = android.R.style.Theme_DeviceDefault_Dialog_Alert;
+    public static final int BACKGROUND = Color.BLACK;
+    public static final int CARD = Color.rgb(23, 24, 28);
+    public static final int DIVIDER = Color.rgb(38, 39, 44);
+    public static final int PILL = Color.rgb(36, 37, 42);
+    public static final int TEXT = Color.rgb(236, 236, 240);
+    public static final int SUBTEXT = Color.rgb(140, 142, 150);
+    public static final int ACCENT = Color.rgb(138, 180, 248);
+    public static final int DANGER = Color.rgb(240, 120, 110);
+    public static final int DIALOG_THEME = android.R.style.Theme_DeviceDefault_Dialog_Alert;
 
     private final Context c;
-    final LinearLayout page;
+    public final LinearLayout page;
     private LinearLayout card;
 
-    Cards(Context context) {
+    public Cards(Context context) {
         c = context;
         page = new LinearLayout(c);
         page.setOrientation(LinearLayout.VERTICAL);
@@ -42,10 +42,10 @@ final class Cards {
     }
 
     /** The page in a scroll view that keeps clear of the status and navigation bars. */
-    ScrollView scroll() {
+    public ScrollView scroll() {
         ScrollView scroll = new ScrollView(c);
         scroll.setBackgroundColor(BACKGROUND);
-        scroll.setClipToPadding(false);
+        scroll.setClipToPadding(true);   // cards stop at the status bar instead of sliding under it
         scroll.addView(page);
         scroll.setOnApplyWindowInsetsListener((v, insets) -> {
             Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
@@ -55,7 +55,7 @@ final class Cards {
         return scroll;
     }
 
-    TextView title(String text, String subtitle) {
+    public TextView title(String text, String subtitle) {
         TextView t = label(text, 30, TEXT);
         t.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
         t.setPadding(dp(8), dp(24), 0, dp(4));
@@ -67,7 +67,7 @@ final class Cards {
     }
 
     /** Starts a new card, with a small heading above it (or a gap). */
-    LinearLayout group(String heading) {
+    public LinearLayout group(String heading) {
         if (heading != null) {
             TextView h = label(heading, 13, SUBTEXT);
             h.setPadding(dp(20), dp(28), 0, dp(8));
@@ -84,7 +84,7 @@ final class Cards {
     }
 
     /** One row box in the current card, with a divider above it when needed. */
-    LinearLayout rowBox() {
+    public LinearLayout rowBox() {
         if (card.getChildCount() > 0) {
             View rule = new View(c);
             rule.setBackgroundColor(DIVIDER);
@@ -102,7 +102,7 @@ final class Cards {
     }
 
     /** Title (and detail) on the left, a value on the right. Returns the value; value.getParent().getParent() is the row. */
-    TextView row(String title, String detail) {
+    public TextView row(String title, String detail) {
         LinearLayout box = rowBox();
         LinearLayout line = new LinearLayout(c);
         line.setGravity(Gravity.CENTER_VERTICAL);
@@ -118,7 +118,7 @@ final class Cards {
     }
 
     /** A row that opens something: a "›" at the right. */
-    void link(String title, String detail, Runnable open) {
+    public void link(String title, String detail, Runnable open) {
         TextView value = row(title, detail);
         value.setText("›");
         value.setTextSize(20);
@@ -126,7 +126,7 @@ final class Cards {
         ((View) value.getParent().getParent()).setOnClickListener(v -> open.run());
     }
 
-    Switch switchRow(String title, String detail) {
+    public Switch switchRow(String title, String detail) {
         LinearLayout box = rowBox();
         LinearLayout line = new LinearLayout(c);
         line.setGravity(Gravity.CENTER_VERTICAL);
@@ -143,7 +143,7 @@ final class Cards {
     }
 
     /** A row of equal rounded pills with gaps, inside the current card. */
-    LinearLayout pills(String[] labels, Runnable[] actions) {
+    public LinearLayout pills(String[] labels, Runnable[] actions) {
         LinearLayout box = rowBox();
         box.setBackground(null);
         LinearLayout line = new LinearLayout(c);
@@ -159,18 +159,18 @@ final class Cards {
         return line;
     }
 
-    TextView pill(String text) {
+    public TextView pill(String text) {
         TextView p = label(text, 15, TEXT);
         p.setGravity(Gravity.CENTER);
         p.setBackground(pressable(rounded(PILL, 14)));
         return p;
     }
 
-    interface Progress {
+    public interface Progress {
         void changed(int progress);
     }
 
-    SeekBar seekBar(int max, int progress, Progress changed) {
+    public SeekBar seekBar(int max, int progress, Progress changed) {
         SeekBar bar = new SeekBar(c);
         bar.setMax(max);
         bar.setProgress(progress);
@@ -198,7 +198,7 @@ final class Cards {
         return bar;
     }
 
-    LinearLayout texts(String title, String detail) {
+    public LinearLayout texts(String title, String detail) {
         LinearLayout texts = new LinearLayout(c);
         texts.setOrientation(LinearLayout.VERTICAL);
         texts.addView(label(title, 16, TEXT));
@@ -210,7 +210,7 @@ final class Cards {
         return texts;
     }
 
-    TextView label(String s, int size, int color) {
+    public TextView label(String s, int size, int color) {
         TextView t = new TextView(c);
         t.setText(s);
         t.setTextSize(size);
@@ -218,19 +218,19 @@ final class Cards {
         return t;
     }
 
-    GradientDrawable rounded(int color, int radiusDp) {
+    public GradientDrawable rounded(int color, int radiusDp) {
         GradientDrawable g = new GradientDrawable();
         g.setColor(color);
         g.setCornerRadius(dp(radiusDp));
         return g;
     }
 
-    RippleDrawable pressable(GradientDrawable content) {
+    public RippleDrawable pressable(GradientDrawable content) {
         return new RippleDrawable(ColorStateList.valueOf(Color.argb(40, 255, 255, 255)), content,
                 content != null ? content : rounded(Color.WHITE, 0));
     }
 
-    int dp(int v) {
+    public int dp(int v) {
         return Math.round(v * c.getResources().getDisplayMetrics().density);
     }
 }

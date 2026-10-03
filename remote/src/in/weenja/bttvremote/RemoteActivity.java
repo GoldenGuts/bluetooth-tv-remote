@@ -35,6 +35,7 @@ import android.widget.TextView;
 import android.window.OnBackInvokedCallback;
 import android.window.OnBackInvokedDispatcher;
 
+import in.weenja.bttvremote.common.Cards;
 import in.weenja.bttvremote.common.Protocol;
 import in.weenja.bttvremote.Haptics.Pattern;
 import in.weenja.bttvremote.gesture.GestureConfig;
@@ -128,6 +129,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         if (!core.bind()) {
             label("Remote Core is not installed");
             haptics.play(Pattern.ERROR);
+            askToInstallCore();
         }
         Sensor gravity = sensors.getDefaultSensor(Sensor.TYPE_GRAVITY);
         if (gravity != null) sensors.registerListener(this, gravity, SensorManager.SENSOR_DELAY_UI);
@@ -859,7 +861,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         ui.link("Settings", null, this::openSettings);
         ui.link("Pairing help", null, this::pairingHelp);
         ui.link("Remote Core", "The Bluetooth link app", core::openCoreApp);
-        ui.link("Support the app ♥", "Free and open source. Sponsor on GitHub", this::openSponsor);
+        ui.link("Support the app", "Free and open source. Sponsor on GitHub", this::openSponsor);
         ui.link("Connection log", null, () -> new AlertDialog.Builder(this, Cards.DIALOG_THEME)
                 .setTitle("Connection log")
                 .setMessage(coreLog.isEmpty() ? "No log yet" : coreLog)
@@ -873,16 +875,37 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
 
     private String coreLog = "";
 
+    private boolean coreDialogShown;
+
+    /** Without Remote Core nothing reaches the TV: say so once, with a way to get it. */
+    private void askToInstallCore() {
+        if (coreDialogShown) return;
+        coreDialogShown = true;
+        new AlertDialog.Builder(this, Cards.DIALOG_THEME)
+                .setTitle("Install Remote Core")
+                .setMessage("This app needs its free companion app, Bluetooth TV Remote Core. "
+                        + "It keeps the Bluetooth link to your TV, so updates of the remote never break your pairing.")
+                .setPositiveButton("Install", (d, w) -> {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW,
+                                android.net.Uri.parse("market://details?id=" + Protocol.CORE_PACKAGE)));
+                    } catch (RuntimeException e) {
+                        startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(
+                                "https://play.google.com/store/apps/details?id=" + Protocol.CORE_PACKAGE)));
+                    }
+                })
+                .setNegativeButton("Later", null)
+                .show();
+    }
+
     /** The browser opens the page: the app itself has no internet permission. */
     private void openSponsor() {
         try {
-            startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(SPONSOR_URL)));
+            startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(Protocol.SPONSOR_URL)));
         } catch (RuntimeException e) {
             label("no browser found");
         }
     }
-
-    private static final String SPONSOR_URL = "https://github.com/sponsors/GoldenGuts";
 
     private void inputDialog() {
         String[] steps = {"Open the input list", "Next input", "2 inputs on", "3 inputs on"};

@@ -1,5 +1,7 @@
 Control your TV with your phone without looking at it.
 
+IMPORTANT: install both apps. This app is the remote. The free companion app "Bluetooth TV Remote Core" keeps the Bluetooth link to your TV. Install Remote Core first, then this app.
+
 The phone connects to the TV as a Bluetooth keyboard, so the TV does not need Wi-Fi or an app.
 
 • Drag anywhere for the arrows, with a tick for each step

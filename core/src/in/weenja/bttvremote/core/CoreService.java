@@ -245,6 +245,11 @@ public class CoreService extends Service {
                 + (isStale() ? " (pairing STALE: pair again)" : "");
     }
 
+    /** The TV that gets the keys, or null. */
+    String hostName() {
+        return ble != null && ble.host() != null ? name(ble.host()) : null;
+    }
+
     String logText() {
         return String.join("\n", log);
     }
