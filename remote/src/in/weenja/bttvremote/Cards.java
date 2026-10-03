@@ -131,6 +131,10 @@ final class Cards {
         LinearLayout line = new LinearLayout(c);
         line.setGravity(Gravity.CENTER_VERTICAL);
         Switch s = new Switch(c);
+        // The default thumb is dark on these dark cards: tint it so on and off are both visible.
+        int[][] states = {{android.R.attr.state_checked}, {}};
+        s.setThumbTintList(new ColorStateList(states, new int[]{ACCENT, Color.rgb(200, 202, 210)}));
+        s.setTrackTintList(new ColorStateList(states, new int[]{Color.argb(120, 138, 180, 248), Color.rgb(70, 72, 80)}));
         line.addView(texts(title, detail), new LinearLayout.LayoutParams(0, -2, 1));
         line.addView(s, new LinearLayout.LayoutParams(-2, -2));
         box.addView(line);
