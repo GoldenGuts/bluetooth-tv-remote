@@ -1,8 +1,24 @@
-# Privacy policy: Bluetooth TV Remote and Bluetooth TV Remote Core
+# Privacy policy: Bluetooth TV Remote, Bluetooth TV Remote Core, and Eyes-Free TV Remote (iPhone)
 
 Last updated: 2026-10-09
 
 These apps do not collect, store, share or sell any personal data.
+
+## Eyes-Free TV Remote for iPhone
+
+- No account, no analytics, no ads, no tracking.
+- The app sends key presses and typed text to the LG TV and the Android TV or Kodi box that you set up, over
+  your local Wi-Fi, and to no other address. It uses the Local Network permission for this, and Bonjour to find
+  them. An LG TV gets them through its own remote-app connection (TLS on newer TVs); the app keeps the key that
+  the TV gives when you allow the iPhone, and the TV's network address (MAC) to turn it on. An Android TV box
+  gets them through the Google TV remote protocol, encrypted with TLS. A Kodi box gets them through Kodi's own
+  remote control (JSON-RPC and EventServer), which Kodi does not encrypt.
+- Voice typing (the Voice button only) uses the microphone and Apple's speech recognition. On iPhones that can,
+  the recognition runs on the iPhone. Otherwise Apple processes the audio under Apple's privacy policy. The app
+  gets only the recognized text and sends it to the TV or the box.
+- Settings, the addresses and the pairing keys stay on your iPhone (the box key in the iOS Keychain).
+
+## Bluetooth TV Remote and Remote Core (Android)
 
 - No account, no analytics, no ads, no tracking.
 - Remote Core has no internet permission. It talks only to your TV, directly over Bluetooth, as a keyboard.

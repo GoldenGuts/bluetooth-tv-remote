@@ -1,0 +1,118 @@
+# TV Remote for iPhone: XcodeGen spec. Generate with: cd ios && xcodegen
+# TVRemote.xcodeproj is generated and git-ignored: never edit it by hand.
+name: TVRemote
+
+options:
+  bundleIdPrefix: in.weenja
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    SUPPORTS_MACCATALYST: NO
+    SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+    CODE_SIGN_STYLE: Automatic
+    # Signing: DEVELOPMENT_TEAM = $(TVREMOTE_TEAM_ID) from the git-ignored ios/Signing.xcconfig
+    # (copy Signing.example.xcconfig). No team: simulator builds and tests still work.
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  TVRemote:
+    type: application
+    platform: iOS
+    sources:
+      - path: TVRemote
+    configFiles:
+      Debug: TVRemote/Resources/App.xcconfig
+      Release: TVRemote/Resources/App.xcconfig
+    settings:
+      base:
+        PRODUCT_NAME: TVRemote
+        PRODUCT_BUNDLE_IDENTIFIER: in.weenja.tvremote
+        DEVELOPMENT_TEAM: $(TVREMOTE_TEAM_ID)
+        # App code is MainActor by default; the few callbacks from other threads say so (@Sendable, nonisolated).
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_PREVIEWS: YES
+      configs:
+        Release:
+          STRIP_INSTALLED_PRODUCT: YES
+          DEPLOYMENT_POSTPROCESSING: YES
+          STRIP_STYLE: all
+    info:
+      path: TVRemote/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: TV Remote
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        LSApplicationCategoryType: public.app-category.utilities
+        # TLS to the box uses the system's encryption only: exempt (no export compliance documents).
+        ITSAppUsesNonExemptEncryption: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIRequiresFullScreen: true
+        UIUserInterfaceStyle: Dark
+        UIStatusBarHidden: true
+        NSLocalNetworkUsageDescription: TV Remote sends your gestures and typing to your LG TV, or your Android TV or Kodi box, on your Wi-Fi. It connects to nothing else.
+        # Discovery: Android TV remote service (v2 and v1), Kodi JSON-RPC, and LG TVs (they announce AirPlay).
+        NSBonjourServices:
+          - _androidtvremote2._tcp
+          - _androidtvremote._tcp
+          - _xbmc-jsonrpc._tcp
+          - _xbmc-jsonrpc-h._tcp
+          - _airplay._tcp
+        NSMicrophoneUsageDescription: TV Remote listens only while you use Voice, to type your words in a TV search box.
+        NSSpeechRecognitionUsageDescription: TV Remote turns your words into text for TV search boxes. Recognition runs on the iPhone when it can.
+
+  TVRemoteTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: TVRemoteTests
+    dependencies:
+      - target: TVRemote
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: in.weenja.tvremote.tests
+        GENERATE_INFOPLIST_FILE: YES
+        DEVELOPMENT_TEAM: $(TVREMOTE_TEAM_ID)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/TVRemote.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TVRemote
+        BUNDLE_LOADER: $(TEST_HOST)
+
+schemes:
+  TVRemote:
+    build:
+      targets:
+        TVRemote: all
+        TVRemoteTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - name: TVRemoteTests
+          parallelizable: false
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

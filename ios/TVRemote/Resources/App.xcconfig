@@ -1,0 +1,7 @@
+// Build settings for the TV Remote app target (committed).
+// Signing for a real iPhone (TVREMOTE_TEAM_ID): ios/Signing.xcconfig, git-ignored and optional.
+// Copy ios/Signing.example.xcconfig to start.
+
+TVREMOTE_TEAM_ID =
+
+#include? "../../Signing.xcconfig"

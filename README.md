@@ -76,6 +76,42 @@ Needs the Android SDK (platform 36, build-tools 36.1.0) and a JDK. No Gradle.
 remote/test/run.sh        # gesture engine tests
 ```
 
+## iPhone
+
+`ios/` holds the iPhone app, **Eyes-Free TV Remote** (home screen: TV Remote). It has no Bluetooth link: iOS does
+not let an app act as a Bluetooth keyboard. It controls the TV and the box over Wi-Fi instead:
+
+- **LG TV (webOS)**: the TV's own remote-app API (the one LG's ThinQ app uses): a WebSocket on port 3000, or
+  3001 with TLS on newer firmware. The TV asks once to allow the iPhone. Buttons, volume, inputs, power off,
+  typing and a mouse pointer. Power on is Wake-on-LAN: turn on "Turn on via Wi-Fi" in the TV settings.
+- **Android TV or Kodi box**: the same protocols as the Android app.
+- **Both**: like the Android app. Keys go to the box or the TV (••• → Send keys to, or "TV ↔ box" on a
+  thumb-menu slot), input and power go to the TV, and Settings → Volume and mute go to picks the volume target.
+
+Same as on Android: the gesture engine (a Swift port, with the same tests), the thumb menu, the knob, the
+vibrations (Core Haptics), typing and voice, the touchpad, the tutorial, the cheat sheet and all settings.
+
+Different on the iPhone:
+
+- The app finds the TV and boxes on the Wi-Fi (Bonjour; an LG TV shows up through AirPlay). Typing an address
+  works too: the app finds out whether an LG TV or a box answers there.
+- Volume: ••• → Volume, a thumb-menu slot, or the knob. An app cannot take the iPhone volume buttons.
+- No lock screen use, no cover screen widget, no Remote Core.
+- Wake-on-LAN goes to the TV's address (and its subnet). Without Apple's multicast entitlement iOS may block the
+  subnet broadcast; the direct packet still reaches a TV in standby.
+
+Build (Xcode 26 or newer and XcodeGen; no signing needed for the simulator):
+
+```sh
+cd ios && xcodegen
+xcodebuild test -project ios/TVRemote.xcodeproj -scheme TVRemote -destination 'platform=iOS Simulator,name=iPhone 17'
+ios/scripts/test-link.sh       # pairing and link against mocks: Android TV v2, v1, Kodi, LG webOS
+ios/scripts/screenshots.sh     # App Store screenshots
+```
+
+For an iPhone or the App Store: copy `ios/Signing.example.xcconfig` to `ios/Signing.xcconfig` and set the team.
+The listing and the release steps are in `ios/store/`.
+
 ## Support
 
 The app is free and has no ads. If it helps you: [sponsor on GitHub](https://github.com/sponsors/GoldenGuts).

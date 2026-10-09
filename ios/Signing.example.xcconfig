@@ -1,0 +1,6 @@
+// Signing for a real iPhone and the App Store. Copy to ios/Signing.xcconfig (git-ignored).
+// Simulator builds and the tests need none of this.
+
+// Your Apple team id (10 letters and digits): developer.apple.com → Membership, or the OU of your
+// "Apple Development" certificate.
+TVREMOTE_TEAM_ID =
