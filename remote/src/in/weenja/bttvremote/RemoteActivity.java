@@ -1110,7 +1110,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         ui.page.addView(head);
 
         ui.group("Send keys to");
-        targetSwitch = ui.switchRow("Android TV box (Wi-Fi)", "Input and power stay on the TV. Volume: see Settings");
+        targetSwitch = ui.switchRow("Android TV or Kodi box (Wi-Fi)","Input and power stay on the TV. Volume: see Settings");
         targetSwitch.setChecked(boxTarget());
         targetSwitch.setOnCheckedChangeListener((b, on) -> {
             if (on != boxTarget()) switchTarget(on);

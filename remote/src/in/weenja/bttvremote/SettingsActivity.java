@@ -86,7 +86,7 @@ public class SettingsActivity extends Activity {
                 })
                 .show());
 
-        ui.group("Android TV box (Wi-Fi)");
+        ui.group("Android TV or Kodi box (Wi-Fi)");
         boxAddress = ui.row("Address", "The box's IP address on your Wi-Fi");
         String host = prefs.getString(Tuning.BOX_HOST, "");
         boxAddress.setText(host.isEmpty() ? "Not set" : host);
@@ -216,7 +216,8 @@ public class SettingsActivity extends Activity {
         field.setPadding(dp(20), dp(16), dp(20), dp(16));
         new AlertDialog.Builder(this, DIALOG_THEME)
                 .setTitle("Box address")
-                .setMessage("The IP address of the box. On the box: Settings → Network → your Wi-Fi. "
+                .setMessage("The IP address of the box. On the box: Settings → Network → your Wi-Fi "
+                        + "(Kodi: Settings → System information → Network). "
                         + "Give it a fixed address in your router, so it does not change.")
                 .setView(field)
                 .setPositiveButton("Save", (d, w) -> {
@@ -246,8 +247,10 @@ public class SettingsActivity extends Activity {
                 haptics.play(Pattern.READY);
                 new AlertDialog.Builder(this, DIALOG_THEME)
                         .setTitle("Kodi found")
-                        .setMessage("The box runs Kodi: no pairing needed. Keys now go to Kodi; volume, mute, "
-                                + "input and power stay on the TV.\n\nWhen the box runs Android TV, the remote "
+                        .setMessage("The box runs Kodi: no pairing needed. Keys now go to Kodi. Input and power "
+                                + "stay on the TV. Volume: Settings → Volume and mute go to.\n\n"
+                                + "To switch: ••• → Send keys to, or put \"TV ↔ box\" in the thumb menu.\n\n"
+                                + "When the box runs Android TV, the remote "
                                 + "switches to it by itself. Pair it once from here while Android runs.")
                         .setPositiveButton("OK", null)
                         .show();

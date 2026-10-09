@@ -70,6 +70,12 @@ final class Help {
         item(c, p, "Two-finger drag ↑ / ↓", "Input list / Settings");
         item(c, p, "Two-finger hold", "Mute");
 
+        heading(c, p, "Android TV or Kodi box (Wi-Fi)");
+        item(c, p, "••• → Send keys to", "Keys go to the box, with the same gestures. Input and power stay on the TV. "
+                + "Set up the box in Settings");
+        item(c, p, "TV ↔ box", "Switch without a look: put it on a thumb-menu slot in Settings");
+        item(c, p, "••• → Touchpad", "Kodi only: a mouse pointer. Slide, tap, hold, two fingers");
+
         heading(c, p, "Vibrations");
         item(c, p, "Rising buzz on open", "Connected to the TV");
         item(c, p, "Two low buzzes on open", "NOT connected");
@@ -78,7 +84,8 @@ final class Help {
         item(c, p, "Light tick", "Arrow step (up/down sharper, left/right lower)");
 
         heading(c, p, "Screen");
-        item(c, p, "Dot at the top", "Green = connected, red = not connected, gray = core off");
+        item(c, p, "Dot at the top", "Green = connected, red = not connected, gray = core off. "
+                + "With the box: its Wi-Fi link, orange = connecting");
         item(c, p, "••• at the top right", "Extras: text, voice, inputs, practice, settings, help");
         item(c, p, "Practice", "Gestures without keys, with big labels");
 
