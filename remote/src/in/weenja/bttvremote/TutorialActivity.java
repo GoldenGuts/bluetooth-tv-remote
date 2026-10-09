@@ -154,13 +154,21 @@ public class TutorialActivity extends Activity implements GestureEngine.Listener
     private void buildLessons() {
         boolean menu = config.menuArmMs < 100_000;   // Settings can turn the thumb menu off
         add(G_TAP, 0, "Tap = OK", "Tap anywhere on the black area.", "a quick tap");
-        add(G_RIGHT, 0, "Drag = arrows", "Drag right until you feel a tick. Each tick = one step.", "drag right");
-        add(G_UP3, 0, "Many steps", "Drag up for 3 ticks in ONE touch. A new touch starts the count again.",
-                "drag up 3 ticks in one touch");
+        if (config.flick) {
+            add(G_RIGHT, 0, "Swipe = arrow", "Swipe right. One swipe = one tick = one step.", "a short swipe right");
+            add(G_UP3, 0, "Many steps", "Drag up a long way in ONE touch: one tick, then more ticks after about "
+                    + Math.round(config.flickMoreMm / 10) + " cm.", "drag up far, 3 ticks in one touch");
+        } else {
+            add(G_RIGHT, 0, "Drag = arrows", "Drag right until you feel a tick. Each tick = one step.", "drag right");
+            add(G_UP3, 0, "Many steps", "Drag up for 3 ticks in ONE touch. A new touch starts the count again.",
+                    "drag up 3 ticks in one touch");
+        }
         if (config.repeatDelayMs < 100_000) add(G_REPEAT, 0, "Hold = repeat",
                 "Drag down one tick, then stop and keep holding. It repeats while you hold.",
                 "drag down, then stop and hold");
-        add(G_BACK, 0, "Back", "Swipe in from the left or right edge of the screen.", "swipe in from the side edge");
+        if (twoTapBack()) add(G_BACK, 0, "Back", "Tap with two fingers. Or swipe in from the left or right edge.",
+                "a two-finger tap");
+        else add(G_BACK, 0, "Back", "Swipe in from the left or right edge of the screen.", "swipe in from the side edge");
         if (!menu) return;
         String center = Tuning.menuName(prefs, 4);
         if (Tuning.menuAction(prefs, 4) != 0) add(G_LIFT, 4, "Hold, lift = " + center,
@@ -327,10 +335,15 @@ public class TutorialActivity extends Activity implements GestureEngine.Listener
 
     // ---- engine ----
 
+    private boolean twoTapBack() {
+        return Tuning.app(prefs, Tuning.TWO_FINGER) == 1 && Tuning.app(prefs, Tuning.TWO_TAP) == 1;
+    }
+
     @Override
     public void onAction(Action a, boolean repeat) {
         boolean twoFinger = !menuActive && slot(a) >= 0 || a == Action.REWIND || a == Action.FAST_FORWARD;
         if (twoFinger && Tuning.app(prefs, Tuning.TWO_FINGER) == 0) return;
+        if (a == Action.PLAY_PAUSE && !menuActive && twoTapBack()) a = Action.BACK;   // like the remote
         showFeedback(a);
         if (menuActive && slot(a) >= 0) {
             int s = slot(a);

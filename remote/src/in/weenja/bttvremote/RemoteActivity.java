@@ -38,16 +38,19 @@ import android.window.OnBackInvokedDispatcher;
 import in.weenja.bttvremote.common.Cards;
 import in.weenja.bttvremote.common.Protocol;
 import in.weenja.bttvremote.Haptics.Pattern;
+import in.weenja.bttvremote.box.BoxLink;
 import in.weenja.bttvremote.gesture.GestureConfig;
 import in.weenja.bttvremote.gesture.GestureEngine;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 /**
  * The remote. A black screen that takes gestures anywhere.
- * Keys go to Remote Core; the vibration plays only when the core accepted the key, else the error buzz.
+ * Keys go to Remote Core (Bluetooth, the TV) or to an Android TV box (Wi-Fi). Input and power always go to the
+ * TV; volume and mute go where Settings say (VOLUME_TO). The vibration plays only when the key went out, else the error buzz.
  */
 public class RemoteActivity extends Activity implements GestureEngine.Listener, SensorEventListener {
 
@@ -61,6 +64,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
     private GestureEngine engine;
     private Haptics haptics;
     private CoreClient core;
+    private BoxLink box;
     private SensorManager sensors;
     private PowerManager.WakeLock pocketGuard;
 
@@ -86,6 +90,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
     private boolean resumed;
     private boolean greeted;
     private int lastState = -1;
+    private int lastBoxState = -1;
     private int turns;
 
     // thumb bias calibration: raw swipe start and angles
@@ -102,6 +107,17 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         haptics = new Haptics(getSystemService(Vibrator.class));
         engine = new GestureEngine(Tuning.load(prefs), this);
         core = new CoreClient(this, this::coreStatus);
+        box = new BoxLink(new File(getFilesDir(), "box"), android.os.Build.MODEL, main::post, new BoxLink.Listener() {
+            @Override
+            public void status(int state, String detail) {
+                boxStatus(state, detail);
+            }
+
+            @Override
+            public void keyboard(boolean open, String text) {
+                boxKeyboard(open, text);
+            }
+        });
         sensors = getSystemService(SensorManager.class);
         PowerManager pm = getSystemService(PowerManager.class);
         if (pm.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)) {
@@ -142,8 +158,16 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         applySettings();
         if (pocketGuard != null && !pocketGuard.isHeld() && Tuning.app(prefs, Tuning.POCKET) == 1) pocketGuard.acquire();
         touched();
-        // With a status already known (core stays bound), greet at once.
-        if (core.state != Protocol.STATE_OFF || core.data.containsKey("log")) greet();
+        String host = prefs.getString(Tuning.BOX_HOST, "");
+        boolean boxReady = !host.isEmpty();   // Android TV needs a pairing, Kodi none: the link finds out
+        if (boxReady) box.start(host);
+        else box.stop();
+        if (boxTarget() && !boxReady) greet();   // no link will come up: say so now
+        if (targetSwitch != null) targetSwitch.setChecked(boxTarget());
+        updateInteractive();
+        showStatus();
+        // With a status already known (core stays bound), greet at once. The box greets when its link is up.
+        if (!boxTarget() && (core.state != Protocol.STATE_OFF || core.data.containsKey("log"))) greet();
     }
 
     @Override
@@ -154,6 +178,8 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         sensors.unregisterListener(this);
         if (pocketGuard != null && pocketGuard.isHeld()) pocketGuard.release();
         main.removeCallbacks(screenTimeout);
+        if (touchpad) setTouchpad(false);
+        box.stop();
         super.onPause();
     }
 
@@ -161,6 +187,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
     protected void onDestroy() {
         getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback);
         core.unbind();
+        box.stop();
         super.onDestroy();
     }
 
@@ -178,7 +205,13 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
             // Slide down repeats (one per 15 mm) for the input list only; other choices fire once.
             if (assigned == 0 || (slotFired[slot] && assigned != Protocol.INPUT)) return;
             slotFired[slot] = true;
-            send(assigned, pattern(assigned));
+            if (assigned == Tuning.SWITCH_TARGET) switchTarget(!boxTarget());
+            else if (assigned == Tuning.TOUCHPAD) setTouchpad(true);
+            else send(assigned, pattern(assigned));
+            return;
+        }
+        if (action == GestureEngine.Action.PLAY_PAUSE && Tuning.app(prefs, Tuning.TWO_TAP) == 1) {
+            send(Protocol.BACK, Pattern.BACK);   // two-finger tap: Back needs no aim (Play/Pause stays on hold + lift)
             return;
         }
         switch (action) {
@@ -194,17 +227,24 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
             case INPUT: send(Protocol.INPUT, Pattern.INPUT); break;
             case SETTINGS: send(Protocol.SETTINGS, Pattern.SETTINGS); break;
             case MUTE: send(Protocol.MUTE, Pattern.MUTE); break;
-            case BACK: send(Protocol.BACK, Pattern.BACK); break;
-            case KNOB_LEFT:
-                send(Tuning.app(prefs, Tuning.KNOB_KEYS) == 1 ? Protocol.REWIND : Protocol.LEFT, Pattern.TICK_H);
+            case BACK:
+                edgeBackAt = SystemClock.uptimeMillis();
+                send(Protocol.BACK, Pattern.BACK);
                 break;
-            case KNOB_RIGHT:
-                send(Tuning.app(prefs, Tuning.KNOB_KEYS) == 1 ? Protocol.FAST_FORWARD : Protocol.RIGHT, Pattern.TICK_H);
-                break;
+            case KNOB_LEFT: send(knobKey(false), Pattern.TICK_H); break;
+            case KNOB_RIGHT: send(knobKey(true), Pattern.TICK_H); break;
         }
     }
 
     private final boolean[] slotFired = new boolean[5];
+
+    private int knobKey(boolean right) {
+        switch (Tuning.app(prefs, Tuning.KNOB_KEYS)) {
+            case 1: return right ? Protocol.FAST_FORWARD : Protocol.REWIND;
+            case 2: return right ? Protocol.VOLUME_UP : Protocol.VOLUME_DOWN;
+            default: return right ? Protocol.RIGHT : Protocol.LEFT;
+        }
+    }
 
     private static boolean isMenuAction(GestureEngine.Action a) {
         return a == GestureEngine.Action.HOME || a == GestureEngine.Action.SETTINGS || a == GestureEngine.Action.INPUT
@@ -258,10 +298,98 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
             haptics.play(pattern);
             return;
         }
-        core.send(action, ok -> {
+        deliver(action, ok -> {
             haptics.play(ok ? pattern : Pattern.ERROR);
             if (!ok) feedback.error();
+            if (!ok && boxTarget() && !toBox(action) && tvProblem() != null) label("TV: " + tvProblem());
         });
+    }
+
+    // ---- TV or box ----
+
+    private File boxDir() {
+        return new File(getFilesDir(), "box");
+    }
+
+    private boolean boxTarget() {
+        return prefs.getInt(Tuning.TARGET, 0) == 1;
+    }
+
+    private static boolean volumeKey(int action) {
+        return action == Protocol.VOLUME_UP || action == Protocol.VOLUME_DOWN || action == Protocol.MUTE;
+    }
+
+    /**
+     * With the box as the target: the TV keeps its inputs and power. Volume and mute go to the TV, the box, or
+     * the TV while its link works (a box changes the TV volume only with HDMI-CEC; else it turns its own output down).
+     */
+    private boolean toBox(int action) {
+        if (!boxTarget() || action == Protocol.INPUT || action == Protocol.POWER) return false;
+        if (!volumeKey(action)) return true;
+        int to = Tuning.app(prefs, Tuning.VOLUME_TO);
+        return to == 1 || (to == 2 && tvProblem() != null);
+    }
+
+    private void deliver(int action, CoreClient.Result result) {
+        if (toBox(action)) box.send(action, result::done);
+        else core.send(action, result);
+    }
+
+    /** The vibration tells the link state of the new target: ready or no link. */
+    private void switchTarget(boolean toBox) {
+        if (toBox && prefs.getString(Tuning.BOX_HOST, "").isEmpty()) {
+            // Not set up yet: go straight to the address and pairing. A successful pairing selects the box.
+            if (targetSwitch != null) targetSwitch.setChecked(false);
+            startActivity(new Intent(this, SettingsActivity.class).putExtra(SettingsActivity.SETUP_BOX, true));
+            return;
+        }
+        prefs.edit().putInt(Tuning.TARGET, toBox ? 1 : 0).apply();
+        if (targetSwitch != null && targetSwitch.isChecked() != toBox) targetSwitch.setChecked(toBox);
+        label(toBox ? "→ box" : "→ TV");
+        if (!toBox && touchpad) setTouchpad(false);
+        updateInteractive();
+        showStatus();
+        haptics.play(targetConnected() ? Pattern.READY : Pattern.NO_LINK);
+    }
+
+    /**
+     * An older Android TV box types only through its virtual keyboard, and tells only an interactive client
+     * when a text field opens. So the remote stays interactive while the box is the target: the box's own
+     * on-screen keyboard then gives way to the phone (it comes back when the app goes away).
+     */
+    private void updateInteractive() {
+        box.interactive(boxTarget());
+    }
+
+    /** True when the box opened the panel and the keyboard: its closing closes them again. */
+    private boolean keyboardFromBox;
+
+    /** The box opened (or closed) a keyboard: open the typing panel with the phone keyboard, and the field's text. */
+    private void boxKeyboard(boolean open, String text) {
+        if (!boxTarget() || !resumed || textField == null) return;
+        android.view.inputmethod.InputMethodManager imm = getSystemService(android.view.inputmethod.InputMethodManager.class);
+        if (open) {
+            setFieldQuietly(text);
+            if (!panelOpen) {
+                keyboardFromBox = true;
+                setPanelOpen(true);
+            }
+            panel.post(() -> panel.smoothScrollTo(0, 0));
+            textField.requestFocus();
+            textField.postDelayed(() -> imm.showSoftInput(textField, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT), 120);
+            haptics.play(Pattern.MENU);
+        } else if (keyboardFromBox) {
+            keyboardFromBox = false;
+            imm.hideSoftInputFromWindow(textField.getWindowToken(), 0);
+            textField.clearFocus();
+            setFieldQuietly("");
+            setPanelOpen(false);
+        }
+    }
+
+    private boolean targetConnected() {
+        if (boxTarget()) return box.state == BoxLink.CONNECTED;
+        return core.state == Protocol.STATE_CONNECTED && (core.flags & Protocol.FLAG_STALE) == 0;
     }
 
     private void showFeedback(GestureEngine.Action action) {
@@ -278,7 +406,10 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
             case SETTINGS: menuOrTap(FeedbackView.RIGHT); break;
             case INPUT: menuOrTap(FeedbackView.DOWN); break;
             case MUTE: menuOrTap(FeedbackView.LEFT); break;
-            case PLAY_PAUSE: menuOrTap(4); break;
+            case PLAY_PAUSE:
+                if (!menuActive && Tuning.app(prefs, Tuning.TWO_TAP) == 1) feedback.back(edgeFromRight);
+                else menuOrTap(4);
+                break;
         }
     }
 
@@ -287,13 +418,21 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         else feedback.tap();   // two-finger gestures
     }
 
+    private String hintText() {
+        return "tap = OK   ·   swipe = arrow\nhold = menu   ·   "
+                + (Tuning.app(prefs, Tuning.TWO_TAP) == 1 ? "two-finger tap = back" : "edge swipe = back");
+    }
+
     private boolean edgeFromRight;
+    /** When the surface's own edge swipe sent Back: the system back gesture of the same swipe is then dropped. */
+    private long edgeBackAt;
 
     private final OnBackInvokedCallback backCallback = () -> {
         if (panelOpen && !flex) {
             setPanelOpen(false);
             return;
         }
+        if (SystemClock.uptimeMillis() - edgeBackAt < 1000) return;
         send(Protocol.BACK, Pattern.BACK);
     };
 
@@ -303,8 +442,11 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         if (volume && Tuning.app(prefs, Tuning.VOLUME_KEYS) == 1) {
             int action = keyCode == KeyEvent.KEYCODE_VOLUME_UP ? Protocol.VOLUME_UP : Protocol.VOLUME_DOWN;
             label(Protocol.name(action).replace('_', ' '));
-            if (!practice) core.send(action, ok -> {
-                if (!ok) haptics.play(Pattern.ERROR);
+            // A tick when the key went out: else a press the TV ignored feels the same as one that never left
+            if (practice) haptics.play(Pattern.TICK_V);
+            else deliver(action, ok -> {
+                haptics.play(ok ? Pattern.TICK_V : Pattern.ERROR);
+                if (!ok) label(!toBox(action) && tvProblem() != null ? "TV: " + tvProblem() : "Volume did not go out");
             });
             touched();
             return true;
@@ -322,6 +464,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
     private boolean onSurfaceTouch(View v, MotionEvent e) {
         touched();
         if (calibrationLeft > 0) return calibrate(e);
+        if (touchpad) return touchpadTouch(e);
         int a = e.getActionMasked();
         long t = e.getEventTime();
         int i = e.getActionIndex();
@@ -375,36 +518,181 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         return px / pxPerMm;
     }
 
+    // ---- touchpad: a mouse pointer on a Kodi box ----
+
+    private static final float TAP_MM = 2f;
+    private static final long TAP_MS = 250;
+    private static final long RIGHT_CLICK_MS = 550;
+    private static final float SCROLL_STEP_MM = 7f;
+    /** Pointer travel per mm of finger, as a part of the TV screen. Faster strokes go further. */
+    private static final float POINTER_GAIN = 0.010f;
+
+    private boolean touchpad;
+    private TextView touchpadExit;
+    private float tpLastX, tpLastY, tpStartX, tpStartY, tpScrollMm;
+    private long tpDownAt, tpLastAt;
+    private boolean tpMoved, tpTwoFinger, tpLongDone;
+
+    private void setTouchpad(boolean on) {
+        if (on && !(boxTarget() && box.hasPointer())) {
+            label("touchpad: Kodi only");
+            haptics.play(Pattern.ERROR);
+            on = false;
+        }
+        touchpad = on;
+        engine.cancel(SystemClock.uptimeMillis());
+        main.removeCallbacks(rightClick);
+        if (touchpadExit != null) touchpadExit.setVisibility(on ? View.VISIBLE : View.GONE);
+        if (touchpadSwitch != null && touchpadSwitch.isChecked() != on) touchpadSwitch.setChecked(on);
+        hint.setText(on ? "slide = pointer   ·   tap = click\nhold = menu   ·   two fingers = scroll"
+                : hintText());
+        if (on) {
+            setPanelOpen(false);
+            label("touchpad");
+            haptics.play(Pattern.MENU);
+        }
+    }
+
+    private final Runnable rightClick = () -> {
+        if (!touchpad || tpMoved || tpTwoFinger) return;
+        tpLongDone = true;
+        box.pointerRightClick(ok -> haptics.play(ok ? Pattern.MENU : Pattern.ERROR));
+    };
+
+    private boolean touchpadTouch(MotionEvent e) {
+        long t = e.getEventTime();
+        switch (e.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                tpStartX = tpLastX = e.getX();
+                tpStartY = tpLastY = e.getY();
+                tpDownAt = tpLastAt = t;
+                tpMoved = tpTwoFinger = tpLongDone = false;
+                main.postDelayed(rightClick, RIGHT_CLICK_MS);
+                feedback.touchDown(e.getX(), e.getY());
+                break;
+            case MotionEvent.ACTION_POINTER_DOWN:
+                tpTwoFinger = true;
+                tpScrollMm = 0;
+                tpLastY = (e.getY(0) + e.getY(1)) / 2;
+                main.removeCallbacks(rightClick);
+                break;
+            case MotionEvent.ACTION_MOVE:
+                if (tpTwoFinger) {
+                    if (e.getPointerCount() < 2) break;
+                    float y = (e.getY(0) + e.getY(1)) / 2;
+                    tpScrollMm += mm(y - tpLastY);
+                    tpLastY = y;
+                    while (Math.abs(tpScrollMm) >= SCROLL_STEP_MM) {
+                        int dir = tpScrollMm > 0 ? -1 : 1;   // fingers up = content up (like a phone)
+                        tpScrollMm -= Math.signum(tpScrollMm) * SCROLL_STEP_MM;
+                        box.scroll(dir, ok -> haptics.play(ok ? Pattern.TICK_V : Pattern.ERROR));
+                    }
+                    break;
+                }
+                float dxMm = mm(e.getX() - tpLastX), dyMm = mm(e.getY() - tpLastY);
+                if (!tpMoved && Math.hypot(mm(e.getX() - tpStartX), mm(e.getY() - tpStartY)) > TAP_MM) {
+                    tpMoved = true;
+                    main.removeCallbacks(rightClick);
+                }
+                if (tpMoved) {
+                    float speed = (float) Math.hypot(dxMm, dyMm) / Math.max(1, t - tpLastAt);   // mm per ms
+                    float gain = POINTER_GAIN * (1 + Math.min(3f, speed * 4f));
+                    box.pointerMove(dxMm * gain, dyMm * gain);
+                }
+                tpLastX = e.getX();
+                tpLastY = e.getY();
+                tpLastAt = t;
+                feedback.touchMove(e.getX(), e.getY());
+                break;
+            case MotionEvent.ACTION_UP:
+                main.removeCallbacks(rightClick);
+                feedback.touchUp();
+                if (!tpMoved && !tpTwoFinger && !tpLongDone && t - tpDownAt <= TAP_MS) {
+                    feedback.tap();
+                    box.pointerClick(ok -> haptics.play(ok ? Pattern.CLICK : Pattern.ERROR));
+                }
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                main.removeCallbacks(rightClick);
+                feedback.touchUp();
+                break;
+        }
+        return true;
+    }
+
     // ---- core status ----
 
     private void coreStatus(int state, int flags, Bundle data) {
-        boolean stale = (flags & Protocol.FLAG_STALE) != 0;
-        boolean connected = state == Protocol.STATE_CONNECTED && !stale;
-        if (lastState == Protocol.STATE_CONNECTED && state != Protocol.STATE_CONNECTED && resumed) {
+        if (!boxTarget() && lastState == Protocol.STATE_CONNECTED && state != Protocol.STATE_CONNECTED && resumed) {
             haptics.play(Pattern.LOST);
         }
         lastState = state;
-        if (resumed && !greeted) greet();
-        int color = connected ? Color.rgb(40, 200, 80) : state == Protocol.STATE_OFF ? Color.GRAY : Color.rgb(220, 60, 50);
-        ((GradientDrawable) dot.getBackground()).setColor(color);
-        String host = data.getString("host");
-        statusText.setText(practice ? "practice · no keys sent"
-                : connected ? host + " · connected"
-                : stale ? "pairing is stale · ••• → Pairing help"
-                : state == Protocol.STATE_WAITING ? "not connected · waiting for the TV"
-                : "Remote Core is off · ••• → Remote Core");
-        panelStatus.setText(stale ? "Pairing is stale · see Pairing help"
-                : state == Protocol.STATE_CONNECTED ? "Connected to " + host
-                : state == Protocol.STATE_WAITING ? "Waiting for the TV" : "Remote Core or Bluetooth is off");
-        panelStatus.setTextColor(connected ? Cards.ACCENT : Cards.SUBTEXT);
+        if (resumed && !greeted && !boxTarget()) greet();
         coreLog = data.getString("log", "");
+        showStatus();
+    }
+
+    private void boxStatus(int state, String detail) {
+        if (boxTarget() && resumed) {
+            if (lastBoxState == BoxLink.CONNECTED && state != BoxLink.CONNECTED && state != BoxLink.OFF) {
+                haptics.play(Pattern.LOST);
+            }
+            if (!greeted && state != BoxLink.CONNECTING) greet();
+        }
+        lastBoxState = state;
+        showStatus();
+    }
+
+    /** The dot, the status line and the panel header show the link of the current target. */
+    private void showStatus() {
+        boolean connected = targetConnected();
+        int color;
+        String line, header;
+        if (boxTarget()) {
+            int state = box.state;
+            String name = box.model.isEmpty() ? "box" : box.model;
+            color = connected ? Color.rgb(40, 200, 80) : state == BoxLink.CONNECTING ? Color.rgb(230, 170, 40)
+                    : state == BoxLink.OFF ? Color.GRAY : Color.rgb(220, 60, 50);
+            line = connected ? name + " · Wi-Fi · connected"
+                    : state == BoxLink.CONNECTING ? "box · connecting"
+                    : state == BoxLink.OFF ? "box · not connected"
+                    : "box · " + box.detail;
+            header = connected ? "Connected to " + name + " (Wi-Fi)"
+                    : state == BoxLink.CONNECTING ? "Connecting to the box" : "Box: " + (box.detail.isEmpty() ? "not connected" : box.detail);
+            // Input and power (and maybe volume) still need the TV link: say when it is down
+            String tv = tvProblem();
+            if (tv != null) line += toBox(Protocol.VOLUME_UP) ? "\nvolume via box · TV link: " + tv : "\nTV volume: " + tv;
+        } else {
+            int state = core.state;
+            boolean stale = (core.flags & Protocol.FLAG_STALE) != 0;
+            String host = core.data.getString("host");
+            color = connected ? Color.rgb(40, 200, 80) : state == Protocol.STATE_OFF ? Color.GRAY : Color.rgb(220, 60, 50);
+            line = connected ? host + " · connected"
+                    : stale ? "pairing is stale · ••• → Pairing help"
+                    : state == Protocol.STATE_WAITING ? "not connected · waiting for the TV"
+                    : "Remote Core is off · ••• → Remote Core";
+            header = stale ? "Pairing is stale · see Pairing help"
+                    : state == Protocol.STATE_CONNECTED ? "Connected to " + host
+                    : state == Protocol.STATE_WAITING ? "Waiting for the TV" : "Remote Core or Bluetooth is off";
+        }
+        ((GradientDrawable) dot.getBackground()).setColor(color);
+        statusText.setText(practice ? "practice · no keys sent" : line);
+        panelStatus.setText(header);
+        panelStatus.setTextColor(connected ? Cards.ACCENT : Cards.SUBTEXT);
+    }
+
+    /** Why the Bluetooth link to the TV cannot send keys, or null when it can. */
+    private String tvProblem() {
+        if ((core.flags & Protocol.FLAG_STALE) != 0) return "pairing is stale · pair the TV again";
+        if (core.state == Protocol.STATE_WAITING) return "no Bluetooth link to the TV";
+        if (core.state != Protocol.STATE_CONNECTED) return "Remote Core is off";
+        return null;
     }
 
     /** The first vibration after the screen comes on tells the link state. */
     private void greet() {
         greeted = true;
-        boolean ok = core.state == Protocol.STATE_CONNECTED && (core.flags & Protocol.FLAG_STALE) == 0;
-        haptics.play(ok ? Pattern.READY : Pattern.NO_LINK);
+        haptics.play(targetConnected() ? Pattern.READY : Pattern.NO_LINK);
     }
 
     // ---- sensors ----
@@ -489,7 +777,8 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
     private void applySettings() {
         GestureConfig config = Tuning.gestureConfig(prefs);
         int edgeBack = Tuning.app(prefs, Tuning.EDGE_BACK);
-        // The cover screen may have no system back gesture, so the surface does its own edge swipe.
+        // The cover screen may have no system back gesture, so the surface does its own edge swipe. On the main
+        // screen it catches the swipes the system gesture misses; backCallback drops the double.
         config.edgeBack = edgeBack == 2 || (edgeBack == 1 && onCover);
         engine.setConfig(config);
         feedback.setHold(config.menuArmMs, config.holdSlopMm, pxPerMm);
@@ -500,6 +789,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         feedback.setMenuLabels(labels, Tuning.menuName(prefs, 4));
         feedback.setQuiet(Tuning.app(prefs, Tuning.ANIMATIONS) == 0);
         hint.setVisibility(Tuning.app(prefs, Tuning.HINTS) == 1 ? View.VISIBLE : View.GONE);
+        if (!touchpad) hint.setText(hintText());
         statusText.setVisibility(Tuning.app(prefs, Tuning.STATUS_LINE) == 1 ? View.VISIBLE : View.GONE);
         if (pocketGuard != null && resumed) {
             boolean on = Tuning.app(prefs, Tuning.POCKET) == 1;
@@ -583,6 +873,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
     // ---- extras panel ----
 
     private void setPanelOpen(boolean open) {
+        if (!open) keyboardFromBox = false;
         panelOpen = open;
         layoutPanel();
     }
@@ -593,6 +884,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         boolean showSurface = flex || !panelOpen;
         panel.setVisibility(showPanel ? View.VISIBLE : View.GONE);
         surfaceFrame.setVisibility(showSurface ? View.VISIBLE : View.GONE);
+        updateInteractive();
         engine.cancel(SystemClock.uptimeMillis());
     }
 
@@ -663,21 +955,28 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
 
     private void typeOnTv(String text) {
         if (text.isEmpty()) return;
-        core.text(text, ok -> {
+        CoreClient.Result r = ok -> {
             if (!ok) haptics.play(Pattern.ERROR);
-        });
+        };
+        if (boxTarget()) box.text(text, r::done);
+        else core.text(text, r);
     }
 
     private void sendBackspaces(int n) {
-        for (int i = 0; i < n; i++) {
-            core.key(1, new byte[]{0, 0, 0x2A, 0, 0, 0, 0, 0}, ok -> {
-                if (!ok) haptics.play(Pattern.ERROR);
-            });
+        CoreClient.Result r = ok -> {
+            if (!ok) haptics.play(Pattern.ERROR);
+        };
+        if (boxTarget()) {
+            box.delete(n, r::done);
+            return;
         }
+        for (int i = 0; i < n; i++) core.key(1, new byte[]{0, 0, 0x2A, 0, 0, 0, 0, 0}, r);
     }
 
     private void sendEnter() {
-        core.key(1, new byte[]{0, 0, 0x28, 0, 0, 0, 0, 0}, ok -> haptics.play(ok ? Pattern.CLICK : Pattern.ERROR));
+        CoreClient.Result r = ok -> haptics.play(ok ? Pattern.CLICK : Pattern.ERROR);
+        if (boxTarget()) box.key(BoxLink.KEY_ENTER, r::done);
+        else core.key(1, new byte[]{0, 0, 0x28, 0, 0, 0, 0, 0}, r);
         setFieldQuietly("");
     }
 
@@ -736,6 +1035,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         statusText.setTextColor(Color.GRAY);
         statusText.setTextSize(12);
         statusText.setAlpha(0.7f);
+        statusText.setGravity(Gravity.CENTER_HORIZONTAL);
         statusText.setText("starting…");
         FrameLayout.LayoutParams stLp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         stLp.topMargin = dp(32);
@@ -750,7 +1050,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         surfaceFrame.addView(help, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START));
 
         hint = new TextView(this);
-        hint.setText("tap = OK   ·   drag = arrows\nhold = menu   ·   edge swipe = back");
+        hint.setText(hintText());
         hint.setTextColor(Color.GRAY);
         hint.setTextSize(12);
         hint.setGravity(Gravity.CENTER);
@@ -766,6 +1066,17 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         more.setPadding(dp(16), dp(10), dp(16), dp(10));
         more.setOnClickListener(v -> setPanelOpen(true));
         surfaceFrame.addView(more, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END));
+
+        touchpadExit = new TextView(this);
+        touchpadExit.setText("exit touchpad");
+        touchpadExit.setTextColor(Color.GRAY);
+        touchpadExit.setTextSize(14);
+        touchpadExit.setPadding(dp(18), dp(10), dp(18), dp(10));
+        touchpadExit.setVisibility(View.GONE);
+        touchpadExit.setOnClickListener(v -> setTouchpad(false));
+        FrameLayout.LayoutParams exitLp = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        exitLp.bottomMargin = dp(70);
+        surfaceFrame.addView(touchpadExit, exitLp);
 
         label = new TextView(this);
         label.setTextColor(Color.WHITE);
@@ -797,6 +1108,17 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         close.setOnClickListener(v -> setPanelOpen(false));
         head.addView(close, new LinearLayout.LayoutParams(dp(48), dp(48)));
         ui.page.addView(head);
+
+        ui.group("Send keys to");
+        targetSwitch = ui.switchRow("Android TV box (Wi-Fi)", "Input and power stay on the TV. Volume: see Settings");
+        targetSwitch.setChecked(boxTarget());
+        targetSwitch.setOnCheckedChangeListener((b, on) -> {
+            if (on != boxTarget()) switchTarget(on);
+        });
+        touchpadSwitch = ui.switchRow("Touchpad", "A mouse pointer on the box (Kodi). Slide, tap, hold, two fingers");
+        touchpadSwitch.setOnCheckedChangeListener((b, on) -> {
+            if (on != touchpad) setTouchpad(on);
+        });
 
         ui.group("Type on the TV");
         LinearLayout box = ui.rowBox();
@@ -853,7 +1175,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         practiceSwitch.setChecked(practice);
         practiceSwitch.setOnCheckedChangeListener((b, on) -> {
             practice = on;
-            coreStatus(core.state, core.flags, core.data);
+            showStatus();
         });
         ui.link("Measure thumb angle", "Swipe up 10 times", this::startCalibration);
 
@@ -874,6 +1196,8 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
     }
 
     private String coreLog = "";
+    private android.widget.Switch targetSwitch;
+    private android.widget.Switch touchpadSwitch;
 
     private boolean coreDialogShown;
 
@@ -898,7 +1222,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
                 .show();
     }
 
-    /** The browser opens the page: the app itself has no internet permission. */
+    /** The browser opens the page: the app talks only to the TV and the box. */
     private void openSponsor() {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(Protocol.SPONSOR_URL)));

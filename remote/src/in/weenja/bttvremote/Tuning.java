@@ -31,31 +31,43 @@ final class Tuning {
     static final String GRAVITY = "gravityTurn";
     static final String SHOW_LABELS = "showLabels";
     static final String KNOB_AXIS = "knobAxis";               // 0 = doorknob (long axis), 1 = steering wheel
-    static final String KNOB_KEYS = "knobKeys";               // 0 = D-pad left/right, 1 = rewind/fast forward
+    static final String KNOB_KEYS = "knobKeys";               // 0 = D-pad left/right, 1 = rewind/fast forward, 2 = volume
     static final String EDGE_BACK = "edgeBack";               // 0 = off, 1 = cover screen only, 2 = always
     static final String KNOB_DIR = "knobDirection";           // 1 = normal, 0 = reversed
     static final String MENU_ON = "menuOn";
     static final String REPEAT_ON = "repeatOn";
     static final String TWO_FINGER = "twoFinger";
+    static final String TWO_TAP = "twoTap";                   // two-finger tap: 0 = Play/Pause, 1 = Back
     static final String ANIMATIONS = "animations";
     static final String HINTS = "hints";
     static final String STATUS_LINE = "statusLine";
     static final String VOLUME_KEYS = "volumeKeys";
+    static final String VOLUME_TO = "volumeTo";               // with the box as target: 0 = TV, 1 = box, 2 = TV, else box
     static final String POCKET = "pocketGuard";
     static final String HAPTICS_ON = "hapticsOn";
     /** menuSlot0..4 = up, right, down, left, lift: a Protocol action, 0 = nothing. */
     static final String MENU_SLOT = "menuSlot";
     /** One value for both screens: the key map of the TV. */
     static final String TV_TYPE = "tvType";
+    /** One value for both screens: 0 = keys go to the TV (Bluetooth), 1 = to the Android TV box (Wi-Fi). */
+    static final String TARGET = "target";
+    /** The IP address of the Android TV box. */
+    static final String BOX_HOST = "boxHost";
+    /** A thumb-menu choice that is not a key: switch between the TV and the box. */
+    static final int SWITCH_TARGET = 100;
+    /** A thumb-menu choice: touchpad mode on (a mouse pointer on a Kodi box). */
+    static final int TOUCHPAD = 101;
 
     /** App defaults that differ from the engine defaults (the engine tests keep theirs). */
     static final long MENU_ARM_MS = 600;
+    static final float REVERSE_MM = 14f;
+    static final float EDGE_MM = 5f;
 
     /** Choices for a thumb-menu slot, with names. */
     static final int[] MENU_CHOICES = {0, Protocol.HOME, Protocol.BACK, Protocol.INPUT, Protocol.SETTINGS,
-            Protocol.MUTE, Protocol.PLAY_PAUSE, Protocol.OK};
+            Protocol.MUTE, Protocol.PLAY_PAUSE, Protocol.OK, SWITCH_TARGET, TOUCHPAD};
     static final String[] MENU_CHOICE_NAMES = {"Nothing", "Home", "Back", "Input list", "Settings",
-            "Mute", "Play/Pause", "OK"};
+            "Mute", "Play/Pause", "OK", "TV ↔ box", "Touchpad"};
     private static final int[] MENU_DEFAULTS = {Protocol.HOME, Protocol.SETTINGS, Protocol.INPUT, Protocol.MUTE,
             Protocol.PLAY_PAUSE};
 
@@ -98,16 +110,28 @@ final class Tuning {
     /** The gesture config the app uses: saved values, app defaults, and the on/off switches. */
     static GestureConfig gestureConfig(SharedPreferences p) {
         GestureConfig c = load(p);
-        if (!p.contains(readKey(p, "g.menuArmMs"))) c.menuArmMs = MENU_ARM_MS;
+        appDefaults(p, c);
         if (app(p, MENU_ON) == 0) c.menuArmMs = 1_000_000_000L;      // never opens
         if (app(p, REPEAT_ON) == 0) c.repeatDelayMs = 1_000_000_000L;
         return c;
     }
 
+    /** App defaults for the fields not saved (p null: all of them). */
+    static void appDefaults(SharedPreferences p, GestureConfig c) {
+        if (unset(p, "menuArmMs")) c.menuArmMs = MENU_ARM_MS;
+        if (unset(p, "flick")) c.flick = true;
+        if (unset(p, "reverseMm")) c.reverseMm = REVERSE_MM;
+        if (unset(p, "edgeRejectMm")) c.edgeRejectMm = EDGE_MM;
+    }
+
+    private static boolean unset(SharedPreferences p, String field) {
+        return p == null || !p.contains(readKey(p, "g." + field));
+    }
+
     /** A GestureConfig field as a number (booleans: 1 or 0), with the app defaults, without the on/off switches. */
     static float field(SharedPreferences p, String name) {
         GestureConfig c = load(p);
-        if (!p.contains(readKey(p, "g.menuArmMs"))) c.menuArmMs = MENU_ARM_MS;
+        appDefaults(p, c);
         try {
             Object v = GestureConfig.class.getField(name).get(c);
             if (v instanceof Boolean) return (Boolean) v ? 1 : 0;
@@ -158,7 +182,9 @@ final class Tuning {
             case SHOW_LABELS: return p.getInt(key, 1);
             case KNOB_AXIS: return p.getInt(key, 0);
             case KNOB_KEYS: return p.getInt(key, 0);   // LG apps seek with left/right; 0xB4/0xB3 not verified
-            case EDGE_BACK: return p.getInt(key, 1);
+            case EDGE_BACK: return p.getInt(key, 2);
+            case TWO_TAP: return p.getInt(key, 1);
+            case VOLUME_TO: return p.getInt(key, 2);
             case KNOB_DIR: return p.getInt(key, 1);
             case MENU_ON: case REPEAT_ON: case TWO_FINGER: case ANIMATIONS: case HINTS: case STATUS_LINE:
             case VOLUME_KEYS: case POCKET: case HAPTICS_ON:
@@ -179,11 +205,13 @@ final class Tuning {
         intRow(context, list, p, GRAVITY, "Turn directions with gravity (1 = on)", 0, 1, 1, changed);
         intRow(context, list, p, SHOW_LABELS, "Show action names (1 = on)", 0, 1, 1, changed);
         intRow(context, list, p, KNOB_AXIS, "Knob twist: 0 = doorknob, 1 = steering wheel", 0, 1, 1, changed);
-        intRow(context, list, p, KNOB_KEYS, "Knob sends: 0 = left/right, 1 = rewind/fast forward", 0, 1, 1, changed);
+        intRow(context, list, p, KNOB_KEYS, "Knob sends: 0 = left/right, 1 = rewind/fast forward, 2 = volume", 0, 2, 1, changed);
         intRow(context, list, p, KNOB_DIR, "Knob direction: 1 = normal, 0 = reversed", 0, 1, 1, changed);
         intRow(context, list, p, EDGE_BACK, "Edge swipe = Back: 0 off, 1 cover screen, 2 always", 0, 2, 1, changed);
+        intRow(context, list, p, TWO_TAP, "Two-finger tap: 0 = Play/Pause, 1 = Back", 0, 1, 1, changed);
 
         GestureConfig defaults = new GestureConfig();
+        appDefaults(null, defaults);
         GestureConfig current = load(p);
         for (Field f : fields()) fieldRow(context, list, p, f, current, defaults, changed);
 

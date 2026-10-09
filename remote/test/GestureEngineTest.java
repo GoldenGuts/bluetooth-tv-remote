@@ -138,6 +138,43 @@ public final class GestureEngineTest {
                         .glide(1, 16, 0, 150).glide(1, 8, 0, 80).up(1),
                 "RIGHT RIGHT RIGHT RIGHT");
 
+        // ---- one finger: spring-back (reverseMm) ----
+        GestureConfig sb = new GestureConfig();
+        sb.reverseMm = 14f;
+        check("spring-back: right 12, back 8 -> only RIGHT",
+                new Rig(sb).down(1, 35, 75).glide(1, 12, 0, 100).glide(1, -8, 0, 60).up(1), "RIGHT");
+        check("spring-back: right 28, back 10 -> no LEFT",
+                new Rig(sb).down(1, 35, 75).glide(1, 28, 0, 200).glide(1, -10, 0, 80).up(1), "RIGHT RIGHT RIGHT");
+        check("spring-back: right 28, back 22 -> LEFT at 14, then per 8",
+                new Rig(sb).down(1, 35, 75).glide(1, 28, 0, 200).glide(1, -22, 0, 150).up(1),
+                "RIGHT RIGHT RIGHT LEFT LEFT");
+        check("spring-back: forward again after LEFT needs 14 too",
+                new Rig(sb).down(1, 35, 75).glide(1, 28, 0, 200).glide(1, -14, 0, 100).glide(1, 10, 0, 80)
+                        .glide(1, 4, 0, 40).up(1),
+                "RIGHT RIGHT RIGHT LEFT RIGHT");
+
+        // ---- one finger: flick ----
+        GestureConfig fl = new GestureConfig();
+        fl.flick = true;
+        fl.reverseMm = 14f;
+        check("flick: right 8 -> RIGHT", new Rig(fl).down(1, 35, 75).glide(1, 8, 0, 60).up(1), "RIGHT");
+        check("flick: right 25 -> one RIGHT", new Rig(fl).down(1, 35, 75).glide(1, 25, 0, 120).up(1), "RIGHT");
+        check("flick: one jump of 25 -> one RIGHT", new Rig(fl).down(1, 35, 75).at(50).move(1, 60, 75).up(1), "RIGHT");
+        check("flick: right 20, spring back 15 -> one RIGHT",
+                new Rig(fl).down(1, 35, 75).glide(1, 20, 0, 100).glide(1, -15, 0, 80).up(1), "RIGHT");
+        check("flick: short flick 6 mm on lift -> RIGHT",
+                new Rig(fl).down(1, 35, 75).glide(1, 6, 0, 40).up(1), "RIGHT");
+        check("flick: 4 mm then lift -> nothing", new Rig(fl).down(1, 35, 75).glide(1, 4, 0, 40).up(1), "");
+        check("flick: diagonal 5,5 on lift -> nothing", new Rig(fl).down(1, 35, 75).glide(1, 5, 5, 40).up(1), "");
+        check("flick: tap still OK", new Rig(fl).down(1, 35, 75).at(100).up(1), "OK");
+        check("flick: long drag 46 -> 1 + steps at 30, 38, 46",
+                new Rig(fl).down(1, 35, 75).glide(1, 46, 0, 300).up(1), "RIGHT RIGHT RIGHT RIGHT");
+        check("flick: up 10 -> UP", new Rig(fl).down(1, 35, 75).glide(1, 0, -10, 60).up(1), "UP");
+        check("flick: hold after the flick repeats",
+                new Rig(fl).down(1, 35, 75).glide(1, 10, 0, 60).at(600).up(1), "RIGHT RIGHT(r) RIGHT(r)");
+        check("flick: menu still opens on a still hold",
+                new Rig(fl).down(1, 35, 75).at(450).up(1), "~MENU_OPEN PLAY_PAUSE");
+
         // ---- one finger: auto-repeat ----
         check("repeat after hold away from start",
                 rig().down(1, 35, 75).glide(1, 12, 0, 100).at(820).up(1),

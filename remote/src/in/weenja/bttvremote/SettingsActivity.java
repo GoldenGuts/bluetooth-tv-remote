@@ -20,6 +20,8 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowManager;
+import android.widget.EditText;
+import android.text.InputType;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -28,6 +30,10 @@ import android.widget.Switch;
 import android.widget.TextView;
 
 import in.weenja.bttvremote.Haptics.Pattern;
+import in.weenja.bttvremote.box.BoxLink;
+import in.weenja.bttvremote.box.BoxPairing;
+
+import java.io.File;
 
 import java.util.Locale;
 
@@ -38,6 +44,8 @@ import java.util.Locale;
 public class SettingsActivity extends Activity {
 
     private static final int DIALOG_THEME = Cards.DIALOG_THEME;
+    /** Intent extra: open the box address and pairing at once. */
+    static final String SETUP_BOX = "setupBox";
 
     private SharedPreferences prefs;
     private Haptics haptics;
@@ -52,6 +60,12 @@ public class SettingsActivity extends Activity {
         Tuning.cover = d != null && d.getDisplayId() != Display.DEFAULT_DISPLAY;
         haptics = new Haptics(getSystemService(Vibrator.class));
         build();
+        if (state == null && getIntent().getBooleanExtra(SETUP_BOX, false)) {
+            main.post(() -> {
+                if (prefs.getString(Tuning.BOX_HOST, "").isEmpty()) askAddress(this::checkBox);
+                else checkBox();
+            });
+        }
     }
 
     private void build() {
@@ -72,6 +86,15 @@ public class SettingsActivity extends Activity {
                 })
                 .show());
 
+        ui.group("Android TV box (Wi-Fi)");
+        boxAddress = ui.row("Address", "The box's IP address on your Wi-Fi");
+        String host = prefs.getString(Tuning.BOX_HOST, "");
+        boxAddress.setText(host.isEmpty() ? "Not set" : host);
+        ((View) boxAddress.getParent().getParent()).setOnClickListener(v -> askAddress(this::checkBox));
+        boxPair = ui.row("Pair", "Android TV only: the box shows a code. Kodi needs no pairing");
+        boxPair.setText(BoxLink.paired(boxDir()) ? "Paired" : "Not paired");
+        ((View) boxPair.getParent().getParent()).setOnClickListener(v -> pairBox());
+
         ui.group("Thumb menu");
         toggle("Thumb menu", "Hold still, then slide or lift", Tuning.MENU_ON);
         slider("Hold time", "menuArmMs", 300, 1500, 50, v -> String.format(Locale.US, "%.2f s", v / 1000f));
@@ -80,9 +103,27 @@ public class SettingsActivity extends Activity {
         for (int i = 0; i < 5; i++) menuChoice(where5[i], i);
 
         ui.group("Arrows");
-        slider("First step", "firstStepMm", 6, 25, 1, v -> Math.round(v) + " mm");
+        Switch flick = ui.switchRow("One swipe = one step", "Off: one step per distance, like a jog wheel");
+        flick.setChecked(Tuning.field(prefs, "flick") != 0);
+        flick.setOnCheckedChangeListener((b, on) -> {
+            Tuning.setField(prefs, "flick", on ? 1 : 0);
+            flick.post(() -> {   // other sliders, same scroll position
+                View old = ((android.view.ViewGroup) findViewById(android.R.id.content)).getChildAt(0);
+                int y = old != null ? old.getScrollY() : 0;
+                build();
+                View now = ((android.view.ViewGroup) findViewById(android.R.id.content)).getChildAt(0);
+                if (now != null) now.post(() -> now.scrollTo(0, y));
+            });
+        });
+        if (Tuning.field(prefs, "flick") != 0) {
+            slider("Step at", "flickMm", 4, 20, 1, v -> Math.round(v) + " mm");
+            slider("Long drag adds steps from", "flickMoreMm", 15, 60, 1, v -> Math.round(v) + " mm");
+        } else {
+            slider("First step", "firstStepMm", 6, 25, 1, v -> Math.round(v) + " mm");
+        }
         slider("Each next step", "stepMm", 4, 20, 1, v -> Math.round(v) + " mm");
         toggleField("Drag back steps back", null, "reverseSteps");
+        slider("Step back needs", "reverseMm", 0, 30, 1, v -> Math.round(v) + " mm");
         toggle("Repeat while holding", null, Tuning.REPEAT_ON);
         slider("Repeat starts after", "repeatDelayMs", 200, 1500, 50, v -> String.format(Locale.US, "%.2f s", v / 1000f));
         slider("Repeat speed", "repeatIntervalMs", 60, 500, 10, v -> "every " + Math.round(v) + " ms");
@@ -96,12 +137,15 @@ public class SettingsActivity extends Activity {
         slider("Twist per notch", "knobStepDeg", 8, 40, 1, v -> Math.round(v) + "°");
         choice("Twist like a", Tuning.KNOB_AXIS, new String[]{"Doorknob", "Steering wheel"});
         choice("Direction", Tuning.KNOB_DIR, new String[]{"Reversed", "Normal"});
-        choice("Sends", Tuning.KNOB_KEYS, new String[]{"Left / right", "Rewind / forward"});
+        choice("Sends", Tuning.KNOB_KEYS, new String[]{"Left / right", "Rewind / forward", "Volume"});
 
         ui.group("Gestures");
         choice("Edge swipe = Back", Tuning.EDGE_BACK, new String[]{"Off", "Cover screen", "Always"});
         toggle("Two-finger gestures", null, Tuning.TWO_FINGER);
+        choice("Two-finger tap", Tuning.TWO_TAP, new String[]{"Play/Pause", "Back"});
         toggle("Volume keys control the TV", null, Tuning.VOLUME_KEYS);
+        choice("Volume and mute go to", Tuning.VOLUME_TO,
+                new String[]{"TV (Bluetooth)", "Box (Wi-Fi)", "TV, or the box when the TV link is down"});
 
         ui.group("Vibration");
         toggle("Vibration", null, Tuning.HAPTICS_ON);
@@ -145,10 +189,150 @@ public class SettingsActivity extends Activity {
     private void resetScreen() {
         SharedPreferences.Editor e = prefs.edit();
         for (String key : prefs.getAll().keySet()) {
-            if (key.equals("tutorialSeen") || key.equals("helpSeen") || key.equals(Tuning.TV_TYPE)) continue;
+            if (key.equals("tutorialSeen") || key.equals("helpSeen") || key.equals(Tuning.TV_TYPE)
+                    || key.equals(Tuning.TARGET) || key.equals(Tuning.BOX_HOST)) continue;
             if (Tuning.cover == key.endsWith(".cover")) e.remove(key);
         }
         e.apply();
+    }
+
+    // ---- Android TV box ----
+
+    private TextView boxAddress;
+    private TextView boxPair;
+    private BoxPairing pairing;
+    private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+
+    private File boxDir() {
+        return new File(getFilesDir(), "box");
+    }
+
+    private void askAddress(Runnable then) {
+        EditText field = new EditText(this);
+        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        field.setText(prefs.getString(Tuning.BOX_HOST, ""));
+        field.setHint("192.168.1.50");
+        field.setSingleLine();
+        field.setPadding(dp(20), dp(16), dp(20), dp(16));
+        new AlertDialog.Builder(this, DIALOG_THEME)
+                .setTitle("Box address")
+                .setMessage("The IP address of the box. On the box: Settings → Network → your Wi-Fi. "
+                        + "Give it a fixed address in your router, so it does not change.")
+                .setView(field)
+                .setPositiveButton("Save", (d, w) -> {
+                    String host = field.getText().toString().trim();
+                    if (!host.equals(prefs.getString(Tuning.BOX_HOST, ""))) {
+                        prefs.edit().putString(Tuning.BOX_HOST, host).apply();
+                        boxAddress.setText(host.isEmpty() ? "Not set" : host);
+                        if (!host.isEmpty()) then.run();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    /** Kodi (CoreELEC) needs no pairing; Android TV does. A dual-boot box may run either. */
+    private void checkBox() {
+        String host = prefs.getString(Tuning.BOX_HOST, "");
+        new Thread(() -> {
+            boolean kodi = BoxLink.kodiAt(host);
+            main.post(() -> {
+                if (isFinishing()) return;
+                if (!kodi) {
+                    pairBox();
+                    return;
+                }
+                prefs.edit().putInt(Tuning.TARGET, 1).apply();
+                haptics.play(Pattern.READY);
+                new AlertDialog.Builder(this, DIALOG_THEME)
+                        .setTitle("Kodi found")
+                        .setMessage("The box runs Kodi: no pairing needed. Keys now go to Kodi; volume, mute, "
+                                + "input and power stay on the TV.\n\nWhen the box runs Android TV, the remote "
+                                + "switches to it by itself. Pair it once from here while Android runs.")
+                        .setPositiveButton("OK", null)
+                        .show();
+            });
+        }, "box-check").start();
+    }
+
+    private void pairBox() {
+        String host = prefs.getString(Tuning.BOX_HOST, "");
+        if (host.isEmpty()) {
+            askAddress(this::pairBox);
+            return;
+        }
+        AlertDialog wait = new AlertDialog.Builder(this, DIALOG_THEME)
+                .setTitle("Pair with the box")
+                .setMessage("Connecting to " + host + "…")
+                .setNegativeButton("Cancel", (d, w) -> pairing.cancel())
+                .setCancelable(false)
+                .show();
+        AlertDialog[] codeDialog = new AlertDialog[1];
+        pairing = new BoxPairing(boxDir(), host, android.os.Build.MODEL, main::post, new BoxPairing.Listener() {
+            @Override
+            public void codeShown(int length) {
+                wait.dismiss();
+                codeDialog[0] = askCode(length);
+            }
+
+            @Override
+            public void done(boolean ok, String message) {
+                wait.dismiss();
+                if (codeDialog[0] != null) codeDialog[0].dismiss();
+                boxPair.setText(BoxLink.paired(boxDir()) ? "Paired" : "Not paired");
+                if (ok) {
+                    prefs.edit().putInt(Tuning.TARGET, 1).apply();
+                    haptics.play(Pattern.READY);
+                }
+                new AlertDialog.Builder(SettingsActivity.this, DIALOG_THEME)
+                        .setTitle(ok ? "Paired" : "Pairing failed")
+                        .setMessage(ok ? "Keys now go to the box. Input and power stay on the TV. Volume: Settings → Volume and mute go to.\n\n"
+                                + "To switch: ••• → Send keys to, or put \"TV ↔ box\" in the thumb menu."
+                                : message)
+                        .setPositiveButton("OK", null)
+                        .show();
+            }
+        });
+        pairing.start();
+    }
+
+    private AlertDialog askCode(int length) {
+        EditText field = new EditText(this);
+        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+                | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        field.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(length),
+                new android.text.InputFilter.AllCaps()});
+        field.setHint(length == 4 ? "4D35" : "4D35A1");
+        field.setSingleLine();
+        field.setTextSize(24);
+        field.setGravity(Gravity.CENTER);
+        field.setPadding(dp(20), dp(16), dp(20), dp(16));
+        AlertDialog d = new AlertDialog.Builder(this, DIALOG_THEME)
+                .setTitle("Code on the TV")
+                .setMessage("Type the " + length + " characters that the box shows.")
+                .setView(field)
+                .setPositiveButton("Pair", null)
+                .setNegativeButton("Cancel", (dlg, w) -> pairing.cancel())
+                .setCancelable(false)
+                .show();
+        d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            if (pairing.submit(field.getText().toString())) {
+                d.setMessage("Checking…");
+                v.setEnabled(false);
+            } else {
+                d.setMessage("That code does not fit. Check it and type it again.");
+                haptics.play(Pattern.ERROR);
+            }
+        });
+        field.requestFocus();
+        d.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+        return d;
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (pairing != null) pairing.cancel();
+        super.onDestroy();
     }
 
     private void vibrationSheet() {

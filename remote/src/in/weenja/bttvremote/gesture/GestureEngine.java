@@ -12,6 +12,12 @@ import java.util.ArrayList;
  * drag to the right (+x) is UP and a drag down (+y) is RIGHT. With biasDeg = 20 a drag that goes up and
  * 20 degrees to the right (a thumb arc) is a clean UP.
  *
+ * Flick (flick on): one swipe = one step. The step comes at flickMm, or at the lift after flickLiftMm. More steps
+ * come only from holding (repeat) or from a long drag: past flickMoreMm the drag steps like the jog wheel.
+ *
+ * Spring-back: a step against the last step direction needs reverseMm of drag back (at least the step size),
+ * so the thumb relaxing at the end of a swipe does not step back.
+ *
  * Thumb menu (one finger): hold still (holdSlopMm) for menuArmMs gives MENU_OPEN. From the point where
  * the menu opened: lift within menuSelectMm = PLAY_PAUSE; a flick of menuSelectMm picks a direction (axis
  * rule as for the D-pad): up = HOME, left = MUTE, right = SETTINGS (once, rest of touch ignored), down =
@@ -94,6 +100,8 @@ public final class GestureEngine {
     private int axis;
     private int lockSign;
     private float ratchet;
+    private int lastSign;          // direction of the last ratchet step
+    private boolean jog;           // flick: the drag passed flickMoreMm
     private boolean settingsDone;
     private float qx, qy;          // repeat: where the finger settled, and when
     private long qt;
@@ -216,7 +224,14 @@ public final class GestureEngine {
                 if (arm == ARM_MENU) {
                     if (!knobMode && axis == AXIS_NONE && menuMax < c.menuSelectMm - EPS) action(Action.PLAY_PAUSE, false);
                 } else if (!emitted && axis == AXIS_NONE && arm == ARM_NONE
-                        && timeMs - t0 < c.tapMaxMs && maxDist < c.tapMaxMm) action(Action.OK, false);
+                        && timeMs - t0 < c.tapMaxMs && maxDist < c.tapMaxMm) {
+                    action(Action.OK, false);
+                } else if (c.flick && !emitted && axis == AXIS_NONE) {
+                    // A short flick that lifts before flickMm: one step if the direction is clear
+                    toLogical(p1.x, p1.y);
+                    float dx = lx - sx, dy = ly - sy;
+                    if (Math.hypot(dx, dy) >= c.flickLiftMm - EPS && clearAxis(dx, dy)) step(lock(dx, dy) > 0 ? 1 : -1, false);
+                }
                 endGesture();
                 break;
             case TWO:
@@ -302,6 +317,8 @@ public final class GestureEngine {
         axis = AXIS_NONE;
         lockSign = 0;
         ratchet = 0f;
+        lastSign = 0;
+        jog = false;
         settingsDone = false;
         repeating = false;
         tapSpoiled = false;
@@ -370,7 +387,8 @@ public final class GestureEngine {
     private void repeat(long t) {
         toLogical(p1.x, p1.y);
         float along = axis == AXIS_X ? lx - sx : ly - sy;
-        int sign = along >= c.firstStepMm - EPS ? 1 : along <= -c.firstStepMm + EPS ? -1 : 0;
+        float first = firstMm();
+        int sign = along >= first - EPS ? 1 : along <= -first + EPS ? -1 : 0;
         if (sign == 0 || (!c.reverseSteps && sign != lockSign)) return;
         if (!repeating) {
             repeating = true;
@@ -394,17 +412,31 @@ public final class GestureEngine {
         float d = (float) Math.hypot(dx, dy);
         trackHold(d);
         if (axis == AXIS_NONE) {
-            if (d < c.firstStepMm - EPS) return;
+            if (d < firstMm() - EPS) return;
             if (!clearAxis(dx, dy) && d < c.axisDecideMaxMm - EPS) return; // near 45 degrees: wait
             float along = lock(dx, dy);
-            ratchet = lockSign * Math.min(Math.abs(along), c.firstStepMm);
+            // Flick: the next step is a long drag away (flickMoreMm from the start)
+            ratchet = lockSign * (c.flick ? c.flickMoreMm - c.stepMm : Math.min(Math.abs(along), c.firstStepMm));
             step(lockSign, false);
-            runRatchet(along, c.stepMm, c.reverseSteps);
+            drag(along);
             settle(cx, cy, t);
         } else {
-            runRatchet(axis == AXIS_X ? dx : dy, c.stepMm, c.reverseSteps);
+            drag(axis == AXIS_X ? dx : dy);
             if (Math.hypot(cx - qx, cy - qy) > c.holdStillMm) settle(cx, cy, t);
         }
+    }
+
+    private float firstMm() {
+        return c.flick ? c.flickMm : c.firstStepMm;
+    }
+
+    /** One-finger D-pad after the first step. Flick: nothing (not even back) until the drag passes flickMoreMm. */
+    private void drag(float along) {
+        if (c.flick && !jog) {
+            if (lockSign * along < c.flickMoreMm - EPS) return;
+            jog = true;
+        }
+        runRatchet(along, c.stepMm, c.reverseSteps);
     }
 
     private void moveMenu() {
@@ -493,21 +525,28 @@ public final class GestureEngine {
         axis = Math.abs(dx) > Math.abs(dy) ? AXIS_X : AXIS_Y;
         float along = axis == AXIS_X ? dx : dy;
         lockSign = along > 0 ? 1 : -1;
+        lastSign = lockSign;
         return along;
     }
 
-    /** Jog wheel: one step per `size` away from the last step. Without reverse, only the lock direction. */
+    /**
+     * Jog wheel: one step per `size` away from the last step. Without reverse, only the lock direction.
+     * A step against the last step direction needs max(size, reverseMm).
+     */
     private void runRatchet(float along, float size, boolean reverse) {
-        if (reverse || lockSign > 0) {
-            while (along - ratchet >= size - EPS) {
-                ratchet += size;
+        float back = Math.max(size, c.reverseMm);
+        while (true) {
+            float fwd = lastSign < 0 ? back : size, bwd = lastSign > 0 ? back : size;
+            if ((reverse || lockSign > 0) && along - ratchet >= fwd - EPS) {
+                ratchet += fwd;
+                lastSign = 1;
                 step(1, false);
-            }
-        }
-        if (reverse || lockSign < 0) {
-            while (ratchet - along >= size - EPS) {
-                ratchet -= size;
+            } else if ((reverse || lockSign < 0) && ratchet - along >= bwd - EPS) {
+                ratchet -= bwd;
+                lastSign = -1;
                 step(-1, false);
+            } else {
+                break;
             }
         }
     }

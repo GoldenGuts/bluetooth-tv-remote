@@ -4,12 +4,13 @@ IMPORTANT: install both apps. This app is the remote. The free companion app "Bl
 
 The phone connects to the TV as a Bluetooth keyboard, so the TV does not need Wi-Fi or an app.
 
-• Drag anywhere for the arrows, with a tick for each step
-• Tap for OK, swipe in from the edge for Back
+• Swipe anywhere for the arrows: one swipe = one step, with a tick
+• Tap for OK; tap with two fingers or swipe in from the edge for Back
 • Hold, then slide for Home, Input, Mute or Settings; lift for Play/Pause
 • Hold, then twist your wrist to seek
 • A different vibration for each action
 • Volume keys control the TV
+• Optional: an Android TV box (Ugoos, Google TV, Shield) over Wi-Fi, with the same gestures
 • Type and speak text into TV search boxes
 • Works over the lock screen and on the Galaxy Flip cover screen
 • Interactive tutorial and adjustable gestures

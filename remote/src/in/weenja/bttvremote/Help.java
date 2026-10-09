@@ -54,10 +54,10 @@ final class Help {
 
         heading(c, p, "One thumb");
         item(c, p, "Tap", "OK");
-        item(c, p, "Drag ↑ ↓ ← →", "Arrows. One step at 12 mm, then one per 8 mm. Drag back = step back.");
+        item(c, p, "Swipe ↑ ↓ ← →", "Arrows. One swipe = one step. A long drag (3 cm or more) adds steps.");
         item(c, p, "Drag, then stop", "Repeats the arrow while you hold");
         item(c, p, "Swipe in from the edge", "Back (also the Good Lock back button)");
-        item(c, p, "Volume keys", "TV volume");
+        item(c, p, "Volume keys", "TV volume, a tick per step. Screen off: turn it on in Remote Core");
 
         heading(c, p, "Thumb menu: hold still " + String.format(java.util.Locale.US, "%.1f", hold) + " s");
         body(c, p, "A ring fills around your thumb, then a thud. Without lifting:");
@@ -65,7 +65,7 @@ final class Help {
         item(c, p, "Twist the wrist", "Seek knob: one notch per 15°. The lift then does nothing.");
 
         heading(c, p, "Two fingers (optional)");
-        item(c, p, "Two-finger tap", "Play/Pause");
+        item(c, p, "Two-finger tap", "Back (or Play/Pause: Settings → Gestures)");
         item(c, p, "Two-finger drag ← →", "Rewind / forward");
         item(c, p, "Two-finger drag ↑ / ↓", "Input list / Settings");
         item(c, p, "Two-finger hold", "Mute");

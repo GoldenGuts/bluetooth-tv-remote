@@ -2,17 +2,33 @@
 
 Use your Android phone as a TV remote without looking at it. The phone pairs with the TV as a Bluetooth LE keyboard, so the TV does not need Wi-Fi.
 
-- Drag anywhere = arrows, with a tick for each step
-- Tap = OK, swipe in from the edge = Back
+- Swipe anywhere = arrows: one swipe = one step, with a tick. A long drag or a hold adds steps
+- Tap = OK; two-finger tap or swipe in from the edge = Back
 - Hold, then slide = Home / Input / Mute / Settings; lift = Play/Pause
 - Hold, then twist the wrist = seek
 - A different vibration for each action; volume keys control the TV
 - Text and voice typing, lock screen use, Galaxy Flip cover screen widget
+- Optional: an Android TV box (Ugoos, Google TV, Shield) over Wi-Fi, with the same gestures
 
 ## Works with
 
 - Phone: Android 13+ with Bluetooth LE peripheral support. Tested on a Galaxy Z Flip7.
 - TV: tested on LG webOS (LG G5). Android TV / Google TV / Fire TV: choose it in Settings (not tested yet).
+- Android TV box over Wi-Fi: tested on a Ugoos AM9 Pro (remote protocol version 1). Newer Google TV devices use
+  version 2; the app finds the version when it pairs.
+
+## Android TV box (Wi-Fi)
+
+A box on an HDMI input of the TV gets its keys over Wi-Fi, through the Google TV remote service of the box
+(ports 6466 and 6467). Input and power still go to the TV over Bluetooth. Volume and mute go to the TV, or to
+the box when the TV link is down (Settings → Volume and mute go to). The box changes the TV volume only with
+HDMI-CEC; without it, the box turns its own output down.
+
+1. Give the box a fixed IP address in your router.
+2. Settings → Android TV box → Address, then Pair. Type the code that the box shows.
+3. Switch with ••• → Send keys to, or put "TV ↔ box" on a thumb-menu slot.
+
+The link lives in the remote app, not in Remote Core: a Wi-Fi link has no pairing that breaks on an update.
 
 ## Install
 

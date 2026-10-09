@@ -9,7 +9,7 @@ public final class Protocol {
     public static final String CORE_PACKAGE = "in.weenja.bttvremote.core";
     public static final String CORE_SERVICE = "in.weenja.bttvremote.core.CoreService";
     public static final String CORE_START = "in.weenja.bttvremote.core.StartActivity";
-    /** Donations: the browser opens it, the apps have no internet permission. */
+    /** Donations: the browser opens it. The apps talk only to the TV (and the remote to a box on the local network). */
     public static final String SPONSOR_URL = "https://github.com/sponsors/GoldenGuts";
 
     public static final String CORE_ACTIVITY = "in.weenja.bttvremote.core.CoreActivity";

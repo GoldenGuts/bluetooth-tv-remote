@@ -14,6 +14,13 @@ public final class GestureConfig {
     public long repeatDelayMs = 400;
     public long repeatIntervalMs = 150;
     public float holdStillMm = 2f;
+    // Flick: one swipe = one step at flickMm (or a lift after flickLiftMm). A long drag adds steps from flickMoreMm
+    public boolean flick = false;
+    public float flickMm = 8f;
+    public float flickLiftMm = 5f;
+    public float flickMoreMm = 30f;
+    /** A step against the last step needs this much drag back (below the step size: the step size). Stops the thumb spring-back. */
+    public float reverseMm = 0f;
     // Thumb menu: hold still, then lift or flick
     public long menuArmMs = 400;
     public float menuSelectMm = 10f;
@@ -49,6 +56,11 @@ public final class GestureConfig {
         c.repeatDelayMs = repeatDelayMs;
         c.repeatIntervalMs = repeatIntervalMs;
         c.holdStillMm = holdStillMm;
+        c.flick = flick;
+        c.flickMm = flickMm;
+        c.flickLiftMm = flickLiftMm;
+        c.flickMoreMm = flickMoreMm;
+        c.reverseMm = reverseMm;
         c.menuArmMs = menuArmMs;
         c.menuSelectMm = menuSelectMm;
         c.holdSlopMm = holdSlopMm;
