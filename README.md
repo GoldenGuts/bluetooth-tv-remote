@@ -1,32 +1,47 @@
 # Bluetooth TV Remote
 
-Use your Android phone as a TV remote without looking at it. The phone pairs with the TV as a Bluetooth LE keyboard, so the TV does not need Wi-Fi.
+Use your Android phone as a TV remote without looking at it. The phone pairs with the TV as a Bluetooth LE keyboard, so the TV needs no Wi-Fi and no app. An Android TV or Kodi box on the TV can get the same gestures over Wi-Fi.
 
 - Swipe anywhere = arrows: one swipe = one step, with a tick. A long drag or a hold adds steps
 - Tap = OK; two-finger tap or swipe in from the edge = Back
 - Hold, then slide = Home / Input / Mute / Settings; lift = Play/Pause
 - Hold, then twist the wrist = seek
-- A different vibration for each action; volume keys control the TV
+- A different vibration for each action; volume keys control the TV, or a soundbar through HDMI-CEC
 - Text and voice typing, lock screen use, Galaxy Flip cover screen widget
-- Optional: an Android TV box (Ugoos, Google TV, Shield) over Wi-Fi, with the same gestures
+- Optional: an Android TV or Kodi box over Wi-Fi, with the same gestures, typing and a touchpad (Kodi)
 
 ## Works with
 
-- Phone: Android 13+ with Bluetooth LE peripheral support. Tested on a Galaxy Z Flip7.
-- TV: tested on LG webOS (LG G5). Android TV / Google TV / Fire TV: choose it in Settings (not tested yet).
-- Android TV box over Wi-Fi: tested on a Ugoos AM9 Pro (remote protocol version 1). Newer Google TV devices use
-  version 2; the app finds the version when it pairs.
+| Device | Link | Status |
+|---|---|---|
+| Galaxy Z Flip7 | the phone | tested |
+| LG G5 TV (webOS 25) | Bluetooth LE keyboard | tested |
+| Ugoos AM9 Pro, Android TV | Wi-Fi, Google TV remote protocol version 1 | tested |
+| Ugoos AM9 Pro, CoreELEC (Kodi) | Wi-Fi, Kodi JSON-RPC and EventServer | tested |
+| Samsung soundbar, on HDMI between the box and the TV | volume and mute through HDMI-CEC | tested |
+| A TV with Android TV, Google TV or Fire TV | Bluetooth LE keyboard (Settings → TV type) | not tested |
+| Newer Google TV boxes | Wi-Fi, Google TV remote protocol version 2 | not tested |
 
-## Android TV box (Wi-Fi)
+The phone needs Android 13 or newer with Bluetooth LE peripheral support. The app finds the remote protocol
+version of an Android TV box when it pairs.
 
-A box on an HDMI input of the TV gets its keys over Wi-Fi, through the Google TV remote service of the box
-(ports 6466 and 6467). Input and power still go to the TV over Bluetooth. Volume and mute go to the TV, or to
-the box when the TV link is down (Settings → Volume and mute go to). The box changes the TV volume only with
-HDMI-CEC; without it, the box turns its own output down.
+## Android TV or Kodi box (Wi-Fi)
+
+A box on an HDMI input of the TV gets its keys over Wi-Fi. Input and power still go to the TV over Bluetooth.
+
+- **Android TV, Google TV**: the Google TV remote service of the box (ports 6466 and 6467, TLS). Pair once.
+- **Kodi** (for example CoreELEC): Kodi's JSON-RPC (port 9090) and EventServer (UDP 9777). No pairing.
+  Touchpad mode moves Kodi's mouse pointer. If Kodi does not answer, turn on Settings → Services → Control →
+  Allow remote control from applications on other systems.
+
+A dual-boot box (Android TV and CoreELEC) keeps one address, and the remote follows the system that runs.
 
 1. Give the box a fixed IP address in your router.
-2. Settings → Android TV box → Address, then Pair. Type the code that the box shows.
+2. Settings → Android TV box → Address. The app finds Kodi by itself. For Android TV, type the code that the box shows.
 3. Switch with ••• → Send keys to, or put "TV ↔ box" on a thumb-menu slot.
+
+Volume and mute go to the TV, or to the box when the TV link is down (Settings → Volume and mute go to). The box
+changes the volume of the TV or the soundbar only with HDMI-CEC; without it, the box turns its own output down.
 
 The link lives in the remote app, not in Remote Core: a Wi-Fi link has no pairing that breaks on an update.
 

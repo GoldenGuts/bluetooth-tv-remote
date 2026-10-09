@@ -9,14 +9,14 @@ The phone connects to the TV as a Bluetooth keyboard, so the TV does not need Wi
 • Hold, then slide for Home, Input, Mute or Settings; lift for Play/Pause
 • Hold, then twist your wrist to seek
 • A different vibration for each action
-• Volume keys control the TV
-• Optional: an Android TV box (Ugoos, Google TV, Shield) over Wi-Fi, with the same gestures
+• Volume keys control the TV, or your soundbar through HDMI-CEC
+• Optional: an Android TV or Kodi box over Wi-Fi, with the same gestures
 • Type and speak text into TV search boxes
 • Works over the lock screen and on the Galaxy Flip cover screen
 • Interactive tutorial and adjustable gestures
 
 Why two apps: the TV remembers the pairing. Remote Core rarely changes, so updates of this app never break your pairing.
 
-Tested with LG webOS TVs. Android TV, Google TV and Fire TV are supported but not tested yet.
+Tested with an LG webOS TV, a soundbar, and a box with Android TV and Kodi (CoreELEC). TVs with Android TV, Google TV or Fire TV are supported but not tested yet.
 
 Free and open source (GPL-3.0). No ads, no data collected.
