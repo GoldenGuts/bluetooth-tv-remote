@@ -61,12 +61,14 @@ public class CoreActivity extends Activity {
     protected void onResume() {
         super.onResume();
         CoreService.statusListener = () -> runOnUiThread(this::refresh);
+        CoreService.setCoreScreen(true);   // the TV can find the phone while this screen is open (pairing)
         refresh();
     }
 
     @Override
     protected void onPause() {
         CoreService.statusListener = null;
+        CoreService.setCoreScreen(false);
         super.onPause();
     }
 
@@ -84,7 +86,8 @@ public class CoreActivity extends Activity {
         }
         status.setTextColor(connected ? Cards.ACCENT : Cards.SUBTEXT);
         linkValue.setText(core == null ? "Off" : connected ? "Connected"
-                : core.state() == Protocol.STATE_WAITING ? "Waiting for the TV" : "Off");
+                : core.state() != Protocol.STATE_WAITING ? "Off"
+                : core.isAdvertising() ? "Waiting for the TV" : "Idle");
         String host = core != null ? core.hostName() : null;
         tvValue.setText(host != null ? host : "None");
         boolean unrestricted = getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(getPackageName());
@@ -131,7 +134,7 @@ public class CoreActivity extends Activity {
         status.setTextSize(15);
 
         ui.group("Bluetooth link");
-        linkValue = ui.row("Link", null);
+        linkValue = ui.row("Link", "The TV can find the phone while this screen or the remote is open");
         tvValue = ui.row("TV", "The device that gets the keys");
         ((View) tvValue.getParent().getParent()).setOnClickListener(v -> chooseHost());
         ui.link("Choose TV", "If the keys go nowhere", this::chooseHost);

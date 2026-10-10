@@ -38,6 +38,7 @@ final class CoreClient {
     private Messenger core;
     private boolean bound;
     private boolean startRequested;
+    private boolean onScreen;
     private int nextToken = 1;
 
     /** Sent to the core on each connect, so the core uses the right key map. */
@@ -101,6 +102,12 @@ final class CoreClient {
         b.putString("text", text);
         m.setData(b);
         if (!post(m)) finishLater(m.arg2);
+    }
+
+    /** The remote is on screen: the core advertises so the TV can connect. Off saves battery. */
+    void onScreen(boolean on) {
+        onScreen = on;
+        post(Message.obtain(null, Protocol.MSG_ADVERTISE, on ? 1 : 0, 0));
     }
 
     void setTv(int type) {
@@ -174,6 +181,7 @@ final class CoreClient {
             core = new Messenger(service);
             post(Message.obtain(null, Protocol.MSG_SET_TV, tvType, 0));
             post(Message.obtain(null, Protocol.MSG_REGISTER));
+            post(Message.obtain(null, Protocol.MSG_ADVERTISE, onScreen ? 1 : 0, 0));
         }
 
         @Override

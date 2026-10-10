@@ -142,6 +142,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         resumed = true;
         greeted = false;
         core.setTv(prefs.getInt(Tuning.TV_TYPE, Protocol.TV_LG));
+        core.onScreen(true);   // before bind: a new connection sends it too
         if (!core.bind()) {
             label("Remote Core is not installed");
             haptics.play(Pattern.ERROR);
@@ -173,6 +174,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
     @Override
     protected void onPause() {
         resumed = false;
+        core.onScreen(false);   // the core stops advertising: saves battery
         engine.cancel(SystemClock.uptimeMillis());
         haptics.stop();
         sensors.unregisterListener(this);
@@ -626,7 +628,11 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         if (!boxTarget() && lastState == Protocol.STATE_CONNECTED && state != Protocol.STATE_CONNECTED && resumed) {
             haptics.play(Pattern.LOST);
         }
+        // The TV connects a moment after the remote opens (the core advertises only then): say when it is ready
+        boolean nowReady = greeted && resumed && !boxTarget() && lastState == Protocol.STATE_WAITING
+                && state == Protocol.STATE_CONNECTED;
         lastState = state;
+        if (nowReady) greet();
         if (resumed && !greeted && !boxTarget()) greet();
         coreLog = data.getString("log", "");
         showStatus();
@@ -666,13 +672,17 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
             int state = core.state;
             boolean stale = (core.flags & Protocol.FLAG_STALE) != 0;
             String host = core.data.getString("host");
+            // Without adverts the TV cannot connect: the core stopped after a minute without the TV. A key starts them again.
+            boolean idle = state == Protocol.STATE_WAITING && (core.flags & Protocol.FLAG_ADVERTISING) == 0;
             color = connected ? Color.rgb(40, 200, 80) : state == Protocol.STATE_OFF ? Color.GRAY : Color.rgb(220, 60, 50);
             line = connected ? host + " · connected"
                     : stale ? "pairing is stale · ••• → Pairing help"
+                    : idle ? "not connected · TV not found · a key looks again"
                     : state == Protocol.STATE_WAITING ? "not connected · waiting for the TV"
                     : "Remote Core is off · ••• → Remote Core";
             header = stale ? "Pairing is stale · see Pairing help"
                     : state == Protocol.STATE_CONNECTED ? "Connected to " + host
+                    : idle ? "TV not found · is it on? A key looks again"
                     : state == Protocol.STATE_WAITING ? "Waiting for the TV" : "Remote Core or Bluetooth is off";
         }
         ((GradientDrawable) dot.getBackground()).setColor(color);
@@ -995,7 +1005,8 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
                         + "2. On the phone: Bluetooth → delete the TV.\n"
                         + "   Delete on BOTH sides, else the phone refuses the new pairing.\n"
                         + "3. If the TV still shows a link: phone Bluetooth off and on (the watch disconnects for a moment).\n"
-                        + "4. On the TV: search for Bluetooth devices, choose the phone, accept the number on both.\n"
+                        + "4. Open Remote Core and keep it open: only then can the TV find the phone.\n"
+                        + "   On the TV: search for Bluetooth devices, choose the phone, accept the number on both.\n"
                         + "5. In Remote Core: Choose TV, if keys do not work.\n\n"
                         + "Pairing breaks when Remote Core restarts (update, crash, Bluetooth off/on). "
                         + "Updates of TV Remote do not break it.")

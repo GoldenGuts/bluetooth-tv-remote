@@ -8,11 +8,12 @@ import java.util.ArrayDeque;
 /**
  * Sends reports one at a time. The stack refuses a notification while the last one is still pending,
  * so each report waits for onNotificationSent (or a short timeout) and for the hold time of a key press.
+ * Without a host, keys wait while the phone advertises (setHold): a key can wake the link and still arrive.
  */
 final class KeyQueue {
 
     interface Sender {
-        /** 0 = accepted, else an error code. */
+        /** 0 = accepted, BleHid.NO_HOST, or another error code. */
         int send(int reportId, byte[] data);
     }
 
@@ -28,12 +29,17 @@ final class KeyQueue {
     private static final long SENT_TIMEOUT_MS = 40;
     private static final int BUSY = 201;          // BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY
     private static final int MAX_RETRIES = 5;
+    /** A key waits this long for the TV to connect; later it fails. */
+    static final long HOST_WAIT_MS = 10_000;
+    /** After the host connects, waiting keys give the link this long to settle (encryption). Not verified on a TV. */
+    private static final long SETTLE_MS = 1_000;
 
     private static final class Item {
         final int reportId;
         final byte[] data;
         final long waitAfter;
         final Result result;
+        final long queuedAt = SystemClock.uptimeMillis();
         int retries;
 
         Item(int reportId, byte[] data, long waitAfter, Result result) {
@@ -49,6 +55,7 @@ final class KeyQueue {
     private final ArrayDeque<Item> queue = new ArrayDeque<>();
     private boolean waitingForSent;
     private long notBefore;
+    private boolean hold;
 
     KeyQueue(Handler handler, Sender sender) {
         this.handler = handler;
@@ -68,6 +75,24 @@ final class KeyQueue {
         handler.post(() -> {
             for (Item item : queue) if (item.result != null) item.result.done(false);
             queue.clear();
+        });
+    }
+
+    /** true while the phone advertises: keys without a host wait for it (up to HOST_WAIT_MS). */
+    void setHold(boolean hold) {
+        handler.post(() -> {
+            this.hold = hold;
+            pump();
+        });
+    }
+
+    /** The host connected: keys that wait for it go out after SETTLE_MS. */
+    void hostConnected() {
+        handler.post(() -> {
+            if (queue.isEmpty()) return;
+            notBefore = Math.max(notBefore, SystemClock.uptimeMillis() + SETTLE_MS);
+            handler.removeCallbacks(pumpLater);
+            handler.postAtTime(pumpLater, notBefore);
         });
     }
 
@@ -98,6 +123,12 @@ final class KeyQueue {
         }
         Item item = queue.peek();
         int status = sender.send(item.reportId, item.data);
+        if (status == BleHid.NO_HOST && hold && now - item.queuedAt < HOST_WAIT_MS) {
+            // hostConnected() sends it; if no host comes, it fails at the end of the wait
+            handler.removeCallbacks(pumpLater);
+            handler.postAtTime(pumpLater, item.queuedAt + HOST_WAIT_MS);
+            return;
+        }
         if (status == BUSY && item.retries++ < MAX_RETRIES) {
             notBefore = now + 10;
             handler.postAtTime(pumpLater, notBefore);

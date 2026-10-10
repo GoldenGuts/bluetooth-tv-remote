@@ -30,6 +30,13 @@ public final class Protocol {
     public static final int MSG_KEY = 5;
     /** arg1 = TV type (TV_LG, TV_ANDROID). The core keeps it. */
     public static final int MSG_SET_TV = 6;
+    /**
+     * arg1 = 1: the remote is on screen, so the core advertises until the TV connects (at most ADVERTISE_MS,
+     * again after a disconnect). arg1 = 0: the remote left the screen, advertising stops. An older core ignores it.
+     */
+    public static final int MSG_ADVERTISE = 7;
+    /** One advertising window. Without a TV link the phone stops advertising after it, to save battery. */
+    public static final long ADVERTISE_MS = 60_000;
 
     /** LG webOS: Home = Win key, Back = Escape (tested on an LG G5). */
     public static final int TV_LG = 0;
@@ -44,12 +51,14 @@ public final class Protocol {
     public static final int MSG_RESULT = 11;
 
     public static final int STATE_OFF = 0;        // Bluetooth off or no permission
-    public static final int STATE_WAITING = 1;    // advertising, no host
+    public static final int STATE_WAITING = 1;    // no host (FLAG_ADVERTISING: the TV can connect now)
     public static final int STATE_CONNECTED = 2;  // host selected, reports go out
 
     public static final int FLAG_FOREGROUND = 1;  // the core service runs in the foreground
     /** The HID service handle differs from the handle at pairing: the TV will not find the keys. */
     public static final int FLAG_STALE = 2;
+    /** The phone advertises: the TV can find it and connect. Without it, the core is idle until a key or the remote. */
+    public static final int FLAG_ADVERTISING = 4;
 
     // ---- logical actions ----
 
