@@ -1,0 +1,5 @@
+• New setup: say which TV and box you have, and only your steps follow. The app finds your box on the Wi-Fi by itself.
+• Shorter tutorial: 5 gestures. All gestures stay under Help.
+• Kodi: OK opens the player bar, left and right skip.
+• Android TV boxes: Home now works on boxes such as the Ugoos.
+• A swipe up from the bottom edge goes to the phone's home screen.
