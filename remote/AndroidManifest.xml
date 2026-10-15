@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Local network only: the Wi-Fi link to an Android TV box (Google TV remote protocol). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The phone's own Wi-Fi address: the box search tries the addresses next to it. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <queries>
         <package android:name="in.weenja.bttvremote.core" />
@@ -59,6 +61,13 @@
         </receiver>
         <activity
             android:name=".SettingsActivity"
+            android:exported="false"
+            android:screenOrientation="unspecified"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density" />
+
+        <activity
+            android:name=".SetupActivity"
             android:exported="false"
             android:screenOrientation="unspecified"
             android:resizeableActivity="true"

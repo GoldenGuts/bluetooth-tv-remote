@@ -55,6 +55,10 @@ final class Tuning {
     static final String TARGET = "target";
     /** The IP address of the Android TV box. */
     static final String BOX_HOST = "boxHost";
+    /** 1: the TV itself is an Android TV or Google TV, reached over Wi-Fi: every key goes there, no Remote Core. */
+    static final String TV_WIFI = "tvWifi";
+    /** The setup ran to its end (or was skipped): first start then opens the remote, not the setup. */
+    static final String SETUP_DONE = "setupDone";
     /** A thumb-menu choice that is not a key: switch between the TV and the box. */
     static final int SWITCH_TARGET = 100;
     /** A thumb-menu choice: touchpad mode on (a mouse pointer on a Kodi box). */
@@ -191,6 +195,7 @@ final class Tuning {
             case MENU_ON: case REPEAT_ON: case TWO_FINGER: case ANIMATIONS: case HINTS: case STATUS_LINE:
             case VOLUME_KEYS: case POCKET: case HAPTICS_ON: case BOTTOM_HOME:
                 return p.getInt(key, 1);
+            case TV_WIFI: return p.getInt(TV_WIFI, 0);   // one value for both screens
             default: return 0;
         }
     }

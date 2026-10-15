@@ -45,6 +45,9 @@ import java.util.List;
  */
 public class TutorialActivity extends Activity implements GestureEngine.Listener, SensorEventListener {
 
+    /** Intent extra: every gesture. Without it, only the five that run the TV: tap, swipe, back, hold + lift, hold + up. */
+    static final String ALL = "all";
+
     private static final int ACCENT = Color.rgb(138, 180, 248);
     private static final long TICK_MS = 16;
     private static final int G_TAP = 0, G_RIGHT = 1, G_UP3 = 2, G_REPEAT = 3, G_BACK = 4, G_LIFT = 5, G_SLIDE = 6, G_KNOB = 7;
@@ -152,8 +155,20 @@ public class TutorialActivity extends Activity implements GestureEngine.Listener
     // ---- lessons ----
 
     private void buildLessons() {
+        boolean all = getIntent().getBooleanExtra(ALL, false);
         boolean menu = config.menuArmMs < 100_000;   // Settings can turn the thumb menu off
         add(G_TAP, 0, "Tap = OK", "Tap anywhere on the black area.", "a quick tap");
+        if (!all) {
+            add(G_RIGHT, 0, "Swipe = arrow", "Swipe right. One swipe = one step.", "a short swipe right");
+            if (twoTapBack()) add(G_BACK, 0, "Back", "Tap with two fingers.", "a two-finger tap");
+            else add(G_BACK, 0, "Back", "Swipe in from the left or right edge.", "swipe in from the side edge");
+            if (!menu) return;
+            if (Tuning.menuAction(prefs, 0) != 0) add(G_SLIDE, 0, "Hold, slide up = " + Tuning.menuName(prefs, 0),
+                    "Hold still until the thud, then slide up.", "hold, then slide up");
+            if (Tuning.menuAction(prefs, 4) != 0) add(G_LIFT, 4, "Hold, lift = " + Tuning.menuName(prefs, 4),
+                    "Hold still until the thud, then lift.", "hold still until the thud, then lift");
+            return;
+        }
         if (config.flick) {
             add(G_RIGHT, 0, "Swipe = arrow", "Swipe right. One swipe = one tick = one step.", "a short swipe right");
             add(G_UP3, 0, "Many steps", "Drag up a long way in ONE touch: one tick, then more ticks after about "
@@ -211,8 +226,10 @@ public class TutorialActivity extends Activity implements GestureEngine.Listener
         backButton.setVisibility(index > 0 ? View.VISIBLE : View.INVISIBLE);
         if (index == n) {
             stepText.setText("Done");
-            titleText.setText("You know it all.");
-            bodyText.setText("Every gesture works with one thumb, eyes on the TV.");
+            boolean all = getIntent().getBooleanExtra(ALL, false);
+            titleText.setText(all ? "You know it all." : "That is all you need.");
+            bodyText.setText(all ? "Every gesture works with one thumb, eyes on the TV."
+                    : "Each action has its own vibration. More gestures: the ? button → All gestures.");
             statusText.setText("");
             skipButton.setVisibility(View.INVISIBLE);
             donePanel.setVisibility(View.VISIBLE);

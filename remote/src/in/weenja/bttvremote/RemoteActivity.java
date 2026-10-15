@@ -127,9 +127,9 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
 
         setContentView(buildUi());
         applySettings();
-        if (!prefs.getBoolean("tutorialSeen", false)) {
-            prefs.edit().putBoolean("tutorialSeen", true).apply();
-            main.post(this::openTutorial);
+        // First start: which TV and box, only their steps, then the short tutorial. Older installs skip it.
+        if (!prefs.getBoolean(Tuning.SETUP_DONE, false) && !prefs.getBoolean("tutorialSeen", false)) {
+            main.post(this::openSetup);
         }
         getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
@@ -142,7 +142,9 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         greeted = false;
         core.setTv(prefs.getInt(Tuning.TV_TYPE, Protocol.TV_LG));
         core.onScreen(true);   // before bind: a new connection sends it too
-        if (!core.bind()) {
+        // Before the setup, Remote Core stays closed: its permission prompt would come before any explanation.
+        boolean setupPending = !prefs.getBoolean(Tuning.SETUP_DONE, false) && !prefs.getBoolean("tutorialSeen", false);
+        if (!setupPending && !core.bind() && !tvOverWifi()) {
             label("Remote Core is not installed");
             haptics.play(Pattern.ERROR);
             askToInstallCore();
@@ -313,7 +315,12 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
     }
 
     private boolean boxTarget() {
-        return prefs.getInt(Tuning.TARGET, 0) == 1;
+        return prefs.getInt(Tuning.TARGET, 0) == 1 || tvOverWifi();
+    }
+
+    /** The TV is an Android TV or Google TV, reached over Wi-Fi (the setup's choice): no Bluetooth, no Remote Core. */
+    private boolean tvOverWifi() {
+        return Tuning.app(prefs, Tuning.TV_WIFI) == 1;
     }
 
     private static boolean volumeKey(int action) {
@@ -325,6 +332,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
      * the TV while its link works (a box changes the TV volume only with HDMI-CEC; else it turns its own output down).
      */
     private boolean toBox(int action) {
+        if (tvOverWifi()) return true;   // the Wi-Fi device is the TV: input and power too
         if (!boxTarget() || action == Protocol.INPUT || action == Protocol.POWER) return false;
         if (!volumeKey(action)) return true;
         int to = Tuning.app(prefs, Tuning.VOLUME_TO);
@@ -918,8 +926,13 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         engine.cancel(SystemClock.uptimeMillis());
     }
 
+    /** Every gesture: from Help and the panel. The setup opens the short one. */
     private void openTutorial() {
-        startActivity(new Intent(this, TutorialActivity.class));
+        startActivity(new Intent(this, TutorialActivity.class).putExtra(TutorialActivity.ALL, true));
+    }
+
+    private void openSetup() {
+        startActivity(new Intent(this, SetupActivity.class));
     }
 
     private void openSettings() {
@@ -1200,7 +1213,8 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         });
 
         ui.group("Learn");
-        ui.link("Tutorial", null, this::openTutorial);
+        ui.link("Set up again", "Which TV and box, step by step", this::openSetup);
+        ui.link("All gestures", "Learn by doing", this::openTutorial);
         ui.link("Cheat sheet", null, () -> Help.show(this, this::openTutorial));
         android.widget.Switch practiceSwitch = ui.switchRow("Practice mode", "Gestures without sending keys");
         practiceSwitch.setChecked(practice);

@@ -36,9 +36,9 @@ A box on an HDMI input of the TV gets its keys over Wi-Fi. Input and power still
 
 A dual-boot box (Android TV and CoreELEC) keeps one address, and the remote follows the system that runs.
 
-1. Give the box a fixed IP address in your router.
-2. Settings → Android TV box → Address. The app finds Kodi by itself. For Android TV, type the code that the box shows.
-3. Switch with ••• → Send keys to, or put "TV ↔ box" on a thumb-menu slot.
+1. The setup, or Settings → Box: the app searches the Wi-Fi and finds the box. For Android TV, type the code that
+   the box shows. A fixed IP address in the router keeps the box at the same address.
+2. Switch with ••• → Send keys to, or put "TV ↔ box" on a thumb-menu slot.
 
 Volume and mute go to the TV, or to the box when the TV link is down (Settings → Volume and mute go to). The box
 changes the volume of the TV or the soundbar only with HDMI-CEC; without it, the box turns its own output down.
@@ -47,11 +47,17 @@ The link lives in the remote app, not in Remote Core: a Wi-Fi link has no pairin
 
 ## Install
 
-Two apps: **Remote Core** keeps the Bluetooth link, **Bluetooth TV Remote** is the remote.
+Install **Bluetooth TV Remote**. On first start it asks which TV and which box you have, and shows only
+their steps, each with a check mark when it works. Then a short tutorial (5 gestures).
 
-1. Install Remote Core first, then Bluetooth TV Remote.
-2. Open Remote Core and allow Bluetooth.
-3. Keep Remote Core open and pair the TV with the phone from the TV's Bluetooth settings.
+- **LG and other TVs**: Bluetooth. The setup links to **Remote Core**, a second app that keeps the Bluetooth
+  link, and shows where the TV pairs (LG: Settings → All Settings → General → External Devices → Connect
+  Bluetooth Controller). The order of install does not matter.
+- **Android TV or Google TV sets**: Wi-Fi, like a box. All keys go there, power and input too; no Remote Core.
+- **Android TV and Kodi boxes**: Wi-Fi. The setup searches the phone's network for the box (ports 6466 and
+  9090), so no address to type. Android TV shows a code to type; Kodi needs none.
+
+Run it again: ••• → Set up again, or Settings → TV → Set up again. ••• → All gestures has the full tutorial.
 
 Updates of the remote app keep the pairing. A restart of Remote Core can need a new pairing.
 

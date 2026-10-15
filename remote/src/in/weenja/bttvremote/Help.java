@@ -41,7 +41,7 @@ final class Help {
         body(c, p, "Use it without a look. The gesture starts anywhere on the black area.");
         if (tutorial != null) {
             Button start = new Button(c);
-            start.setText("Start the tutorial (learn by doing)");
+            start.setText("All gestures (learn by doing)");
             start.setAllCaps(false);
             start.setOnClickListener(v -> {
                 d.dismiss();
