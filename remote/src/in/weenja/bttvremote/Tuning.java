@@ -34,6 +34,8 @@ final class Tuning {
     static final String KNOB_KEYS = "knobKeys";               // 0 = D-pad left/right, 1 = rewind/fast forward, 2 = volume
     static final String EDGE_BACK = "edgeBack";               // 0 = off, 1 = cover screen only, 2 = always
     static final String KNOB_DIR = "knobDirection";           // 1 = normal, 0 = reversed
+    /** 1: the gesture bar stays, a swipe up from the bottom edge is the phone's Home, never an arrow. */
+    static final String BOTTOM_HOME = "bottomHome";
     static final String MENU_ON = "menuOn";
     static final String REPEAT_ON = "repeatOn";
     static final String TWO_FINGER = "twoFinger";
@@ -187,7 +189,7 @@ final class Tuning {
             case VOLUME_TO: return p.getInt(key, 2);
             case KNOB_DIR: return p.getInt(key, 1);
             case MENU_ON: case REPEAT_ON: case TWO_FINGER: case ANIMATIONS: case HINTS: case STATUS_LINE:
-            case VOLUME_KEYS: case POCKET: case HAPTICS_ON:
+            case VOLUME_KEYS: case POCKET: case HAPTICS_ON: case BOTTOM_HOME:
                 return p.getInt(key, 1);
             default: return 0;
         }

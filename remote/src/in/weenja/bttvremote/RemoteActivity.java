@@ -126,7 +126,6 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         measureDisplay();
 
         setContentView(buildUi());
-        hideSystemBars();
         applySettings();
         if (!prefs.getBoolean("tutorialSeen", false)) {
             prefs.edit().putBoolean("tutorialSeen", true).apply();
@@ -463,11 +462,25 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         return super.onKeyUp(keyCode, event);
     }
 
+    /** The touch started in the bottom gesture strip: it is the phone's Home swipe, not a remote gesture. */
+    private boolean homeSwipe;
+
+    private boolean inHomeStrip(MotionEvent e) {
+        if (Tuning.app(prefs, Tuning.BOTTOM_HOME) == 0) return false;
+        View root = getWindow().getDecorView();
+        WindowInsets insets = root.getRootWindowInsets();
+        if (insets == null) return false;
+        int strip = insets.getInsetsIgnoringVisibility(WindowInsets.Type.mandatorySystemGestures()).bottom;
+        return strip > 0 && e.getRawY() >= root.getHeight() - strip;
+    }
+
     private boolean onSurfaceTouch(View v, MotionEvent e) {
         touched();
+        int a = e.getActionMasked();
+        if (a == MotionEvent.ACTION_DOWN) homeSwipe = inHomeStrip(e);
+        if (homeSwipe) return true;   // the system takes it (and cancels it) when it becomes Home
         if (calibrationLeft > 0) return calibrate(e);
         if (touchpad) return touchpadTouch(e);
-        int a = e.getActionMasked();
         long t = e.getEventTime();
         int i = e.getActionIndex();
         switch (a) {
@@ -785,6 +798,7 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
     }
 
     private void applySettings() {
+        hideSystemBars();
         GestureConfig config = Tuning.gestureConfig(prefs);
         int edgeBack = Tuning.app(prefs, Tuning.EDGE_BACK);
         // The cover screen may have no system back gesture, so the surface does its own edge swipe. On the main
@@ -820,11 +834,17 @@ public class RemoteActivity extends Activity implements GestureEngine.Listener, 
         getWindow().setAttributes(lp);
     }
 
+    /**
+     * Hidden bars make the first swipe up from the bottom only show them, and the app gets that swipe too
+     * (an Up arrow). With bottom Home on, the gesture bar stays, so one swipe goes home.
+     */
     private void hideSystemBars() {
         WindowInsetsController c = getWindow().getInsetsController();
         if (c == null) return;
-        c.hide(WindowInsets.Type.systemBars());
+        boolean bottomHome = Tuning.app(prefs, Tuning.BOTTOM_HOME) == 1;
         c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        c.hide(bottomHome ? WindowInsets.Type.statusBars() : WindowInsets.Type.systemBars());
+        if (bottomHome) c.show(WindowInsets.Type.navigationBars());
     }
 
     private void label(String text) {

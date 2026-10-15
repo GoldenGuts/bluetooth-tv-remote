@@ -141,6 +141,7 @@ public class SettingsActivity extends Activity {
 
         ui.group("Gestures");
         choice("Edge swipe = Back", Tuning.EDGE_BACK, new String[]{"Off", "Cover screen", "Always"});
+        toggle("Bottom swipe = phone Home", "Off: the remote takes the whole screen", Tuning.BOTTOM_HOME);
         toggle("Two-finger gestures", null, Tuning.TWO_FINGER);
         choice("Two-finger tap", Tuning.TWO_TAP, new String[]{"Play/Pause", "Back"});
         toggle("Volume keys control the TV", null, Tuning.VOLUME_KEYS);
