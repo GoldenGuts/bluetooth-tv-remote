@@ -156,7 +156,9 @@ public final class BoxLink {
 
     /** A remote action. The frame is made at send time: the protocol is known only once the link is up. */
     public void send(int action, Result r) {
-        submit(() -> version == KODI ? kodiAction(action) : keyFrame(keyCode(action)), false, r);
+        submit(() -> version == KODI ? kodiAction(action)
+                : version == 1 && action == Protocol.HOME ? intentV1(HOME_INTENT)
+                : keyFrame(keyCode(action)), false, r);
     }
 
     /** One Android key code, pressed and released. While the link connects, the key waits up to 1.5 s. */
@@ -674,7 +676,14 @@ public final class BoxLink {
     // ---- version 1 (older Android TV remote service): [1, type, length (2 bytes), payload] ----
 
     private static final int V1_CONFIGURE = 0, V1_KEY = 2, V1_SHOW_IME = 5, V1_HIDE_IME = 6, V1_CONFIGURE_ACK = 7,
-            V1_IME = 18, V1_INTERACTIVE = 19, V1_PING = 20, V1_PONG = 21;
+            V1_INTENT = 16, V1_IME = 18, V1_INTERACTIVE = 19, V1_PING = 20, V1_PONG = 21;
+
+    /**
+     * Home as a start of the home screen, not the Home key. Android TV drops the Home key until the secure
+     * setting tv_user_setup_complete is 1, and boxes without Google's setup (Ugoos) never set it.
+     */
+    static final String HOME_INTENT = "intent:#Intent;action=android.intent.action.MAIN;"
+            + "category=android.intent.category.HOME;end";
 
     /**
      * ShowIME: the box's EditorInfo, then its ExtractedText. Sent only to an interactive client.
@@ -750,6 +759,14 @@ public final class BoxLink {
             b.put((byte) 1).put((byte) V1_KEY).putShort((short) 16);
             b.putLong(counter++).putInt(up).putInt(code);
         }
+        return b.array();
+    }
+
+    /** An intent URI (Intent.toUri with the intent scheme): the box starts it as an activity. */
+    private static byte[] intentV1(String uri) {
+        byte[] u = uri.getBytes(StandardCharsets.UTF_8);
+        ByteBuffer b = ByteBuffer.allocate(4 + u.length);
+        b.put((byte) 1).put((byte) V1_INTENT).putShort((short) u.length).put(u);
         return b.array();
     }
 

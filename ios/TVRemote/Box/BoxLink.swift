@@ -105,8 +105,11 @@ final class BoxLink {
 
     /// A remote action. The frame is made at send time: the protocol is known only once the link is up.
     func send(_ action: Int, _ r: @escaping Result) {
-        submit({ [unowned self] in version == Self.kodi ? kodiAction(action) : keyFrame(Key.code(action)) },
-               text: false, r)
+        submit({ [unowned self] in
+            if version == Self.kodi { return kodiAction(action) }
+            if version == 1 && action == Key.home { return Self.intentV1(Self.homeIntent) }
+            return keyFrame(Key.code(action))
+        }, text: false, r)
     }
 
     /// One Android key code, pressed and released. While the link connects, the key waits up to 1.5 s.
@@ -533,7 +536,7 @@ final class BoxLink {
     // MARK: - version 1 (older Android TV remote service): [1, type, length (2 bytes), payload]
 
     private static let v1Configure: UInt8 = 0, v1Key: UInt8 = 2, v1ShowIme: UInt8 = 5, v1HideIme: UInt8 = 6,
-                       v1ConfigureAck: UInt8 = 7, v1Ime: UInt8 = 18, v1Interactive: UInt8 = 19, v1Ping: UInt8 = 20,
+                       v1ConfigureAck: UInt8 = 7, v1Intent: UInt8 = 16, v1Ime: UInt8 = 18, v1Interactive: UInt8 = 19, v1Ping: UInt8 = 20,
                        v1Pong: UInt8 = 21
 
     private func handleV1(_ c: Conn) async throws {
@@ -628,6 +631,18 @@ final class BoxLink {
             counter += 1
         }
         return b
+    }
+
+    /**
+     Home as a start of the home screen, not the Home key. Android TV drops the Home key until the secure
+     setting tv_user_setup_complete is 1, and boxes without Google's setup (Ugoos) never set it.
+     */
+    static let homeIntent = "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.HOME;end"
+
+    /// An intent URI (Intent.toUri with the intent scheme): the box starts it as an activity.
+    private static func intentV1(_ uri: String) -> [UInt8] {
+        let u = Array(uri.utf8)
+        return [1, v1Intent] + int16(UInt16(u.count)) + u
     }
 
     /// Interactive on/off: the box switches its keyboard to the virtual one (and back).

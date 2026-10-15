@@ -263,6 +263,8 @@ def remote_v1(conn):
             _, up, code = struct.unpack(">qii", payload)
             if up == 0:
                 log("key %d" % code)
+        elif kind == 16:  # intent URI: the box starts it
+            log("intent " + payload.decode())
         elif kind == 21:
             log("remote v1 pong")
         elif kind == 19:

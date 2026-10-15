@@ -62,6 +62,8 @@ struct LinkIntegrationTests {
             link.key(Key.codeEnter, r.add)
             try await waitForLog("delete 2")
             try await waitForLog("editor action 3")   // the field's Search action, from ShowIME
+            link.send(Key.home, r.add)   // Home starts the home screen: the Home key needs tv_user_setup_complete
+            try await waitForLog("intent " + BoxLink.homeIntent)
             try await waitForLog("remote v1 pong")
         case "kodi", "kodi18":
             let old = Self.mode == "kodi18"   // Kodi 18 has no Input.ButtonEvent
