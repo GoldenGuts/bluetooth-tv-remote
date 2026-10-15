@@ -11,6 +11,7 @@ import in.weenja.bttvremote.common.Protocol;
 /**
  * No UI. Deep link bttvremote://key/<action>, for example bttvremote://key/home, or bttvremote://type/<text>.
  * For Good Lock RegiStar back tap, side key shortcuts, or any launcher shortcut.
+ * Without a TV link the phone advertises for a while; the key waits for the TV (KeyQueue.HOST_WAIT_MS).
  */
 public class KeyLinkActivity extends Activity {
 
@@ -22,6 +23,7 @@ public class KeyLinkActivity extends Activity {
         Vibrator vibrator = getSystemService(Vibrator.class);
         // bttvremote://type/<text> types the text (for tests and automation apps).
         if (uri != null && "type".equals(uri.getHost()) && core != null && uri.getPath() != null) {
+            core.wakeLink();
             core.type(uri.getPath().substring(1), null);
             vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK));
             finish();
@@ -30,6 +32,7 @@ public class KeyLinkActivity extends Activity {
         }
         int action = uri != null ? Protocol.action(uri.getLastPathSegment()) : 0;
         if (action != 0 && core != null) {
+            core.wakeLink();
             core.action(action, ok -> vibrator.vibrate(ok
                     ? VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
                     : VibrationEffect.createOneShot(300, 120)));

@@ -77,8 +77,8 @@ final class Help {
         item(c, p, "••• → Touchpad", "Kodi only: a mouse pointer. Slide, tap, hold, two fingers");
 
         heading(c, p, "Vibrations");
-        item(c, p, "Rising buzz on open", "Connected to the TV");
-        item(c, p, "Two low buzzes on open", "NOT connected");
+        item(c, p, "Rising buzz", "Connected to the TV: on open, or when the TV connects a moment later");
+        item(c, p, "Two low buzzes on open", "NOT connected yet. The TV can connect while the remote is open");
         item(c, p, "One long low buzz", "The key did NOT go out");
         item(c, p, "Three low buzzes", "Connection lost");
         item(c, p, "Light tick", "Arrow step (up/down sharper, left/right lower)");

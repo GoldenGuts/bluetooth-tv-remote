@@ -51,9 +51,13 @@ Two apps: **Remote Core** keeps the Bluetooth link, **Bluetooth TV Remote** is t
 
 1. Install Remote Core first, then Bluetooth TV Remote.
 2. Open Remote Core and allow Bluetooth.
-3. On the TV, pair with the phone from the Bluetooth settings.
+3. Keep Remote Core open and pair the TV with the phone from the TV's Bluetooth settings.
 
 Updates of the remote app keep the pairing. A restart of Remote Core can need a new pairing.
+
+To save battery, the phone advertises (so the TV can find it and connect) only while Remote Core is open,
+while the remote is open (up to a minute; a key starts a new minute), or for a minute after a key from a
+shortcut. It stops as soon as the TV connects; the link itself stays.
 
 ## Why two apps
 

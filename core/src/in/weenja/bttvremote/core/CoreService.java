@@ -38,6 +38,8 @@ import java.util.Locale;
 /**
  * Owns the one GATT server of the app. The server must live as long as the process:
  * a second server gets new attribute handles, and the LG TV does not discover them again.
+ * Advertising (so the TV can connect) runs only while the remote or this app is on screen, or for a while
+ * after a key from another path, and stops when the TV connects. The connected link stays.
  */
 public class CoreService extends Service {
 
@@ -46,6 +48,8 @@ public class CoreService extends Service {
     static final String KEY_PAIRED_HANDLE = "pairedHandle"; // HID handle when the host last subscribed
     static final String KEY_SCREEN_OFF_VOLUME = "screenOffVolume";
     static final String KEY_TV = "tvType";
+    /** Start intent extra: advertise for one window, as after a key (StartActivity). */
+    static final String EXTRA_WAKE = "wake";
 
     private static final String CHANNEL = "core";
     private static final int NOTIFICATION = 1;
@@ -67,6 +71,13 @@ public class CoreService extends Service {
     private int hidHandle = -1;
     private long lastActionAt;
 
+    /** CoreActivity is on screen (pairing, test keys): advertise without a time limit. */
+    private static boolean coreScreen;
+    private boolean remoteOnScreen;
+    /** Ends of the advertising windows (elapsedRealtime): the remote on screen, a key from another path. */
+    private long remoteUntil, keyUntil;
+    private boolean hadHost;
+
     static CoreService instance() {
         return instance;
     }
@@ -83,7 +94,10 @@ public class CoreService extends Service {
                 return BleHid.NO_HOST;
             }
         });
-        volume = new VolumeSession(this, this::action);
+        volume = new VolumeSession(this, (action, result) -> {
+            wakeLink();
+            action(action, result);
+        });
         IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
         filter.addAction(Intent.ACTION_SCREEN_OFF);
         filter.addAction(Intent.ACTION_SCREEN_ON);
@@ -94,6 +108,7 @@ public class CoreService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         goForeground();
+        if (intent != null && intent.getBooleanExtra(EXTRA_WAKE, false)) wakeLink();
         return START_STICKY;
     }
 
@@ -105,6 +120,8 @@ public class CoreService extends Service {
     @Override
     public void onDestroy() {
         // The server stays open on purpose (see the class comment). Only the service object goes away.
+        main.removeCallbacks(advertiseCheck);
+        if (ble != null) ble.setAdvertising(false);   // nothing would stop it later
         unregisterReceiver(systemReceiver);
         volume.release();
         instance = null;
@@ -138,6 +155,46 @@ public class CoreService extends Service {
         if (!all) log("Some characters have no key and were skipped");
     }
 
+    // ---- advertising ----
+
+    /** A key from another path (deep link, volume keys) while no TV is connected: advertise for a while. */
+    void wakeLink() {
+        wake(false);
+    }
+
+    /** A key from the remote extends its window; without MSG_ADVERTISE (older remote) it opens a key window. */
+    private void wake(boolean fromRemote) {
+        if (ble == null || ble.host() != null) return;
+        long end = SystemClock.elapsedRealtime() + Protocol.ADVERTISE_MS;
+        if (fromRemote && remoteOnScreen) remoteUntil = end;
+        else keyUntil = end;
+        updateAdvertising();
+    }
+
+    /** CoreActivity calls it from onResume and onPause. */
+    static void setCoreScreen(boolean on) {
+        coreScreen = on;
+        CoreService s = instance;
+        if (s != null) s.updateAdvertising();
+    }
+
+    private void updateAdvertising() {
+        main.removeCallbacks(advertiseCheck);
+        long now = SystemClock.elapsedRealtime();
+        long until = Math.max(remoteUntil, keyUntil);
+        boolean want = ble != null && ble.isStarted() && ble.host() == null && (coreScreen || until > now);
+        if (want && until > now) main.postDelayed(advertiseCheck, until - now);
+        if (ble != null) ble.setAdvertising(want);
+        queue.setHold(want);
+    }
+
+    private final Runnable advertiseCheck = () -> {
+        if (ble != null && ble.host() == null && !coreScreen) {
+            log("No TV link in " + Protocol.ADVERTISE_MS / 1000 + " s: idle");
+        }
+        updateAdvertising();
+    };
+
     void selectHost(BluetoothDevice device) {
         prefs.edit().putString(KEY_HOST, device.getAddress()).apply();
         if (ble != null) ble.select(device);
@@ -168,10 +225,11 @@ public class CoreService extends Service {
                 ble = new BleHid(getApplicationContext(), Profile.DESCRIPTOR, bleListener);
             }
             ble.setPreferred(prefs.getString(KEY_HOST, null));
-            ble.start();   // a no-op restart of advertising if the server is open
+            ble.start();   // a no-op if the server is open
         } catch (SecurityException e) {
             log("BLE: " + e.getMessage());
         }
+        updateAdvertising();
         pushStatus();
     }
 
@@ -189,7 +247,17 @@ public class CoreService extends Service {
             if (s == null) return;
             s.main.post(() -> {
                 s.log(host != null ? "Host: " + s.name(host) : "Host disconnected");
-                if (host == null) s.queue.clear();
+                if (host == null) {
+                    s.queue.clear();
+                    // The TV went away while the remote is on screen: advertise again, one more window
+                    if (s.remoteOnScreen) s.remoteUntil = SystemClock.elapsedRealtime() + Protocol.ADVERTISE_MS;
+                } else {
+                    s.remoteUntil = 0;
+                    s.keyUntil = 0;
+                    if (!s.hadHost) s.queue.hostConnected();   // keys that waited for the TV go now
+                }
+                s.hadHost = host != null;
+                s.updateAdvertising();   // stops it when the TV is connected
                 s.pushStatus();
             });
         }
@@ -225,6 +293,12 @@ public class CoreService extends Service {
                 s.pushStatus();
             });
         }
+
+        @Override
+        public void advertising(boolean on) {
+            CoreService s = instance;
+            if (s != null) s.main.post(s::pushStatus);
+        }
     };
 
     private boolean isStale() {
@@ -241,8 +315,14 @@ public class CoreService extends Service {
         int s = state();
         String host = ble != null && ble.host() != null ? name(ble.host()) : null;
         return (s == Protocol.STATE_CONNECTED ? "Connected: " + host
-                : s == Protocol.STATE_WAITING ? "Waiting for the TV" : "Off")
+                : s == Protocol.STATE_WAITING ? (isAdvertising() ? "Waiting for the TV" : "Idle: the link starts with the remote")
+                : "Off")
                 + (isStale() ? " (pairing STALE: pair again)" : "");
+    }
+
+    /** The phone advertises: the TV can connect now. */
+    boolean isAdvertising() {
+        return ble != null && ble.isAdvertising();
     }
 
     /** The TV that gets the keys, or null. */
@@ -255,7 +335,8 @@ public class CoreService extends Service {
     }
 
     void pushStatus() {
-        int flags = (foreground ? Protocol.FLAG_FOREGROUND : 0) | (isStale() ? Protocol.FLAG_STALE : 0);
+        int flags = (foreground ? Protocol.FLAG_FOREGROUND : 0) | (isStale() ? Protocol.FLAG_STALE : 0)
+                | (isAdvertising() ? Protocol.FLAG_ADVERTISING : 0);
         BluetoothDevice host = ble != null ? ble.host() : null;
         for (int i = clients.size() - 1; i >= 0; i--) {
             Message m = Message.obtain(null, Protocol.MSG_STATUS, state(), flags);
@@ -351,6 +432,8 @@ public class CoreService extends Service {
                         hidHandle = -1;
                     }
                     queue.clear();
+                    hadHost = false;
+                    updateAdvertising();
                     pushStatus();
                 }
             } else if (Intent.ACTION_SCREEN_OFF.equals(a)) {
@@ -380,12 +463,19 @@ public class CoreService extends Service {
                 case Protocol.MSG_UNREGISTER:
                     clients.remove(reply);
                     break;
+                case Protocol.MSG_ADVERTISE:
+                    remoteOnScreen = msg.arg1 == 1;
+                    remoteUntil = remoteOnScreen ? SystemClock.elapsedRealtime() + Protocol.ADVERTISE_MS : 0;
+                    updateAdvertising();
+                    break;
                 case Protocol.MSG_ACTION:
+                    wake(true);
                     action(msg.arg1, token == 0 || reply == null ? null : ok -> result(reply, token, ok));
                     break;
                 case Protocol.MSG_TEXT:
                     String text = msg.getData().getString("text", "");
                     log("Text: " + text.length() + " characters");
+                    wake(true);
                     type(text, token == 0 || reply == null ? null : ok -> result(reply, token, ok));
                     break;
                 case Protocol.MSG_SET_TV:
@@ -398,6 +488,7 @@ public class CoreService extends Service {
                         break;
                     }
                     lastActionAt = SystemClock.elapsedRealtime();
+                    wake(true);
                     queue.key(new Profile.Key(msg.arg1, press),
                             token == 0 || reply == null ? null : ok -> result(reply, token, ok));
                     break;

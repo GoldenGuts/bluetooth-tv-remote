@@ -26,7 +26,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** HID over GATT: the phone advertises as a Bluetooth LE keyboard. */
+/**
+ * HID over GATT: the phone is a Bluetooth LE keyboard. The GATT server stays open; advertising runs only
+ * when the core asks for it (setAdvertising), because it costs battery all day.
+ */
 final class BleHid {
 
     interface Listener {
@@ -42,6 +45,9 @@ final class BleHid {
 
         /** A device wrote a report CCCD: it discovered the services with the current handles. */
         void subscribed(BluetoothDevice device);
+
+        /** Advertising started (true) or stopped (false). */
+        void advertising(boolean on);
     }
 
     /** send() result when no host is selected. */
@@ -69,6 +75,10 @@ final class BleHid {
     private BluetoothLeAdvertiser advertiser;
     private volatile BluetoothDevice host;
     private volatile String preferred;
+    private volatile boolean ready;            // all services are added
+    private volatile boolean advertiseWanted;
+    private boolean advertiseStarted;          // startAdvertising was called (guarded by this)
+    private volatile boolean advertising;      // the stack confirmed it
 
     BleHid(Context context, byte[] reportMap, Listener listener) {
         this.context = context;
@@ -102,10 +112,7 @@ final class BleHid {
     }
 
     void start() throws SecurityException {
-        if (server != null) {
-            advertise();
-            return;
-        }
+        if (server != null) return;
         server = manager.openGattServer(context, callback);
         context.registerReceiver(bondReceiver, new IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED));
 
@@ -136,8 +143,9 @@ final class BleHid {
     }
 
     void stop() {
+        ready = false;
+        stopAdvertising();
         try {
-            if (advertiser != null) advertiser.stopAdvertising(advertiseCallback);
             if (server != null) {
                 context.unregisterReceiver(bondReceiver);
                 server.close();
@@ -154,6 +162,22 @@ final class BleHid {
 
     boolean isStarted() {
         return server != null;
+    }
+
+    boolean isAdvertising() {
+        return advertising;
+    }
+
+    /** Advertise (the TV can find and connect to the phone) or not. Before the services are ready, it waits for them. */
+    void setAdvertising(boolean on) {
+        advertiseWanted = on;
+        if (!ready) return;
+        try {
+            if (on) advertise();
+            else stopAdvertising();
+        } catch (SecurityException e) {
+            listener.log("BLE: " + e.getMessage());
+        }
     }
 
     /** Returns 0 (BluetoothStatusCodes.SUCCESS), a stack error code, or NO_HOST. */
@@ -187,12 +211,14 @@ final class BleHid {
         return c;
     }
 
-    private void advertise() throws SecurityException {
+    private synchronized void advertise() throws SecurityException {
+        if (advertiseStarted) return;
         advertiser = manager.getAdapter().getBluetoothLeAdvertiser();
         if (advertiser == null) {
             listener.log("BLE: this phone cannot advertise");
             return;
         }
+        advertiseStarted = true;
         advertiser.stopAdvertising(advertiseCallback);
         advertiser.startAdvertising(
                 new AdvertiseSettings.Builder()
@@ -206,15 +232,40 @@ final class BleHid {
                 advertiseCallback);
     }
 
+    /** The connected links stay: only new connections need the adverts. */
+    private synchronized void stopAdvertising() {
+        boolean was = advertiseStarted;
+        advertiseStarted = false;
+        try {
+            if (advertiser != null) advertiser.stopAdvertising(advertiseCallback);
+        } catch (SecurityException | IllegalStateException ignored) {
+        }
+        if (was) {
+            advertising = false;
+            listener.log("BLE: advertising stopped");
+            listener.advertising(false);
+        }
+    }
+
     private final AdvertiseCallback advertiseCallback = new AdvertiseCallback() {
         @Override
         public void onStartSuccess(AdvertiseSettings settings) {
+            synchronized (BleHid.this) {
+                if (!advertiseStarted) return;   // stopped in the meantime
+            }
+            advertising = true;
             listener.log("BLE: advertising as a keyboard");
+            listener.advertising(true);
         }
 
         @Override
         public void onStartFailure(int error) {
+            synchronized (BleHid.this) {
+                advertiseStarted = false;
+            }
+            advertising = false;
             listener.log("BLE: advertise failed, code " + error);
+            listener.advertising(false);
         }
     };
 
@@ -255,8 +306,12 @@ final class BleHid {
                     + (status != 0 ? " status " + status : ""));
             if (HID_SERVICE.equals(service.getUuid())) listener.hidHandle(service.getInstanceId());
             try {
-                if (!pending.isEmpty()) server.addService(pending.poll());
-                else advertise();
+                if (!pending.isEmpty()) {
+                    server.addService(pending.poll());
+                } else {
+                    ready = true;
+                    if (advertiseWanted) advertise();
+                }
             } catch (SecurityException e) {
                 listener.log("BLE: " + e.getMessage());
             }
