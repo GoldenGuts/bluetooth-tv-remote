@@ -429,9 +429,9 @@ public final class BoxLink {
         });
     }
 
-    /** Click on the item under the pointer: the pointer gives it focus, Select takes it. */
+    /** Click on the item under the pointer: the pointer gives it focus, Select takes it (in the player: the bar). */
     public void pointerClick(Result r) {
-        submit(() -> kodi("Input.Select", null), false, r);
+        submit(() -> kodiAction(Protocol.OK), false, r);
     }
 
     public void pointerRightClick(Result r) {
@@ -476,6 +476,8 @@ public final class BoxLink {
     private static final int KODI_PORT = 9090;
     /** The text in Kodi's keyboard: Input.SendText replaces it all, so the phone sends the whole text each time. */
     private final StringBuilder kodiField = new StringBuilder();   // writer thread only
+    /** Kodi 19 or later (JSON-RPC 12): it has Input.ButtonEvent. */
+    private volatile boolean kodiButtons;
 
     /** Kodi answers and the Android TV remote does not: no pairing needed. Blocks up to 3 s. */
     public static boolean kodiAt(String host) {
@@ -513,7 +515,10 @@ public final class BoxLink {
         InputStream in = new BufferedInputStream(s.getInputStream());
         s.setSoTimeout(5000);
         write(kodi("XBMC.GetInfoLabels", "{\"labels\":[\"System.FriendlyName\"]}"));
-        String name = jsonString(readJson(in), "System.FriendlyName");
+        write(kodi("JSONRPC.Version", null));
+        String name = jsonString(kodiReply(in), "System.FriendlyName");   // Kodi answers in order
+        java.util.regex.Matcher major = java.util.regex.Pattern.compile("\"major\"\\s*:\\s*(\\d+)").matcher(kodiReply(in));
+        kodiButtons = major.find() && Integer.parseInt(major.group(1)) >= 12;
         model = name.isEmpty() ? "Kodi" : "Kodi · " + name;
         s.setSoTimeout(0);   // Kodi sends notifications only when something happens
         becomeReady();
@@ -533,7 +538,17 @@ public final class BoxLink {
         }
     }
 
-    private static byte[] kodiAction(int action) {
+    /** The next answer to a request: notifications (they have a method) may come first. */
+    private static String kodiReply(InputStream in) throws IOException {
+        while (true) {
+            String m = readJson(in);
+            if (!m.contains("\"method\"")) return m;
+        }
+    }
+
+    private byte[] kodiAction(int action) {
+        String button = kodiButtons ? kodiButton(action) : null;
+        if (button != null) return kodiButtonEvent(button);
         switch (action) {
             case Protocol.UP: return kodi("Input.Up", null);
             case Protocol.DOWN: return kodi("Input.Down", null);
@@ -551,6 +566,28 @@ public final class BoxLink {
             case Protocol.MUTE: return kodiExecute("mute");
             default: return null;
         }
+    }
+
+    /**
+     * Keys whose meaning depends on the screen go through Kodi's remote keymap, as from a real remote:
+     * in the video player OK opens the player bar and left/right step. Input.Select, Input.Left and the
+     * like skip the keymap, and the player ignores them.
+     */
+    private static String kodiButton(int action) {
+        switch (action) {
+            case Protocol.UP: return "up";
+            case Protocol.DOWN: return "down";
+            case Protocol.LEFT: return "left";
+            case Protocol.RIGHT: return "right";
+            case Protocol.OK: return "select";
+            case Protocol.BACK: return "back";
+            case Protocol.SETTINGS: return "menu";
+            default: return null;
+        }
+    }
+
+    private static byte[] kodiButtonEvent(String button) {
+        return kodi("Input.ButtonEvent", "{\"button\":\"" + button + "\",\"keymap\":\"R1\"}");
     }
 
     private static byte[] kodiExecute(String action) {

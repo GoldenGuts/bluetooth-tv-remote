@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """A fake Android TV or Kodi box on this Mac, to test the iPhone link without a real box.
 
-Usage: mock-box.py atv2|atv1|kodi|webos DIR
+Usage: mock-box.py atv2|atv1|kodi|kodi18|webos DIR
 
   atv2  Google TV remote protocol version 2: pairing (TLS 6467, protobuf, 6-character code) and remote (TLS 6466)
   atv1  version 1 (older Android TV, Ugoos): pairing in JSON with a 4-character code, remote in [1, type, len] frames
   kodi  Kodi JSON-RPC (TCP 9090) and EventServer (UDP 9777)
+  kodi18  the same as Kodi 18 (JSON-RPC 10: no Input.ButtonEvent)
   webos an LG TV: SSAP over a TLS WebSocket on 3001 only (like newer firmware), the prompt, the pointer socket,
         and Wake-on-LAN (UDP 19009 here: port 9 needs root)
 
@@ -316,8 +317,18 @@ def kodi(conn):
             params = obj.get("params")
             log("kodi " + method + (" " + json.dumps(params, sort_keys=True) if params else ""))
             if method == "XBMC.GetInfoLabels":
+                # a notification can come before an answer
+                conn.sendall(json.dumps({"jsonrpc": "2.0", "method": "System.OnWake",
+                                         "params": {"data": None, "sender": "xbmc"}}).encode())
                 reply = {"id": obj.get("id"), "jsonrpc": "2.0",
                          "result": {"System.FriendlyName": os.environ.get("MOCK_KODI_NAME", "MockELEC")}}
+            elif method == "JSONRPC.Version":
+                major = 10 if MODE == "kodi18" else 13
+                reply = {"id": obj.get("id"), "jsonrpc": "2.0",
+                         "result": {"version": {"major": major, "minor": 0, "patch": 0}}}
+            elif method == "Input.ButtonEvent" and MODE == "kodi18":
+                reply = {"id": obj.get("id"), "jsonrpc": "2.0",
+                         "error": {"code": -32601, "message": "Method not found."}}
             else:
                 reply = {"id": obj.get("id"), "jsonrpc": "2.0", "result": "OK"}
             conn.sendall(json.dumps(reply).encode())

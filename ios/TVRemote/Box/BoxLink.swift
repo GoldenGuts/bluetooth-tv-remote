@@ -67,6 +67,8 @@ final class BoxLink {
     private var editorAction = 0
     /// The text in Kodi's keyboard: Input.SendText replaces it all, so the phone sends the whole text each time.
     private let kodiField = NSMutableString()
+    /// Kodi 19 or later (JSON-RPC 12): it has Input.ButtonEvent.
+    private var kodiButtons = false
 
     init(deviceName: String, appName: String) {
         self.deviceName = deviceName
@@ -103,7 +105,7 @@ final class BoxLink {
 
     /// A remote action. The frame is made at send time: the protocol is known only once the link is up.
     func send(_ action: Int, _ r: @escaping Result) {
-        submit({ [unowned self] in version == Self.kodi ? Self.kodiAction(action) : keyFrame(Key.code(action)) },
+        submit({ [unowned self] in version == Self.kodi ? kodiAction(action) : keyFrame(Key.code(action)) },
                text: false, r)
     }
 
@@ -376,9 +378,9 @@ final class BoxLink {
         esSend(Self.esMouse, [0x01] + Self.int16(x) + Self.int16(y))   // absolute
     }
 
-    /// Click on the item under the pointer: the pointer gives it focus, Select takes it.
+    /// Click on the item under the pointer: the pointer gives it focus, Select takes it (in the player: the bar).
     func pointerClick(_ r: @escaping Result) {
-        submit({ Self.kodi("Input.Select") }, text: false, r)
+        submit({ [unowned self] in kodiAction(Key.ok) }, text: false, r)
     }
 
     func pointerRightClick(_ r: @escaping Result) {
@@ -438,8 +440,11 @@ final class BoxLink {
         kodiField.setString("")
         c.idleTimeout(5)
         c.send(Self.kodi("XBMC.GetInfoLabels", "{\"labels\":[\"System.FriendlyName\"]}"))
-        let info = Self.object(try await c.readJsonObject())
-        let name = (info?["result"] as? [String: Any])?["System.FriendlyName"] as? String ?? ""
+        c.send(Self.kodi("JSONRPC.Version"))
+        let info = try await kodiReply(c)   // Kodi answers in order
+        let name = info?["System.FriendlyName"] as? String ?? ""
+        let major = (try await kodiReply(c)?["version"] as? [String: Any])?["major"] as? Int ?? 0
+        kodiButtons = major >= 12
         model = name.isEmpty ? "Kodi" : "Kodi · \(name)"
         c.idleTimeout(nil)   // Kodi sends notifications only when something happens
         becomeReady()
@@ -464,23 +469,52 @@ final class BoxLink {
         (try? JSONSerialization.jsonObject(with: Data(bytes))) as? [String: Any]
     }
 
-    private static func kodiAction(_ action: Int) -> [UInt8]? {
+    /// The result of the next answer to a request: notifications (they have a method) may come first.
+    private func kodiReply(_ c: Conn) async throws -> [String: Any]? {
+        while true {
+            let m = Self.object(try await c.readJsonObject())
+            if m?["method"] == nil { return m?["result"] as? [String: Any] }
+        }
+    }
+
+    private func kodiAction(_ action: Int) -> [UInt8]? {
+        if kodiButtons, let button = Self.kodiButton(action) {
+            return Self.kodi("Input.ButtonEvent", "{\"button\":\"\(button)\",\"keymap\":\"R1\"}")
+        }
         switch action {
-        case Key.up: return kodi("Input.Up")
-        case Key.down: return kodi("Input.Down")
-        case Key.left: return kodi("Input.Left")
-        case Key.right: return kodi("Input.Right")
-        case Key.ok: return kodi("Input.Select")
-        case Key.back: return kodi("Input.Back")
-        case Key.home: return kodi("Input.Home")
-        case Key.settings: return kodi("Input.ContextMenu")
-        case Key.playPause: return kodiExecute("playpause")
-        case Key.rewind: return kodiExecute("stepback")
-        case Key.fastForward: return kodiExecute("stepforward")
-        case Key.volumeUp: return kodiExecute("volumeup")
-        case Key.volumeDown: return kodiExecute("volumedown")
-        case Key.mute: return kodiExecute("mute")
+        case Key.up: return Self.kodi("Input.Up")
+        case Key.down: return Self.kodi("Input.Down")
+        case Key.left: return Self.kodi("Input.Left")
+        case Key.right: return Self.kodi("Input.Right")
+        case Key.ok: return Self.kodi("Input.Select")
+        case Key.back: return Self.kodi("Input.Back")
+        case Key.home: return Self.kodi("Input.Home")
+        case Key.settings: return Self.kodi("Input.ContextMenu")
+        case Key.playPause: return Self.kodiExecute("playpause")
+        case Key.rewind: return Self.kodiExecute("stepback")
+        case Key.fastForward: return Self.kodiExecute("stepforward")
+        case Key.volumeUp: return Self.kodiExecute("volumeup")
+        case Key.volumeDown: return Self.kodiExecute("volumedown")
+        case Key.mute: return Self.kodiExecute("mute")
         default: return nil   // input, power: Kodi has no such key
+        }
+    }
+
+    /**
+     Keys whose meaning depends on the screen go through Kodi's remote keymap, as from a real remote:
+     in the video player OK opens the player bar and left/right step. Input.Select, Input.Left and the
+     like skip the keymap, and the player ignores them.
+     */
+    private static func kodiButton(_ action: Int) -> String? {
+        switch action {
+        case Key.up: return "up"
+        case Key.down: return "down"
+        case Key.left: return "left"
+        case Key.right: return "right"
+        case Key.ok: return "select"
+        case Key.back: return "back"
+        case Key.settings: return "menu"
+        default: return nil
         }
     }
 

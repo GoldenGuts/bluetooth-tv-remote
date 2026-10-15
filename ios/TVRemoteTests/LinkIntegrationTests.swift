@@ -63,11 +63,12 @@ struct LinkIntegrationTests {
             try await waitForLog("delete 2")
             try await waitForLog("editor action 3")   // the field's Search action, from ShowIME
             try await waitForLog("remote v1 pong")
-        case "kodi":
+        case "kodi", "kodi18":
+            let old = Self.mode == "kodi18"   // Kodi 18 has no Input.ButtonEvent
             #expect(link.model == "Kodi · MockELEC")
             #expect(link.hasPointer)
-            try await waitForLog("kodi Input.Up")
-            try await waitForLog("kodi Input.Select")
+            try await waitForLog(old ? "kodi Input.Up" : #"kodi Input.ButtonEvent {"button": "up", "keymap": "R1"}"#)
+            try await waitForLog(old ? "kodi Input.Select" : #"kodi Input.ButtonEvent {"button": "select", "keymap": "R1"}"#)
             try await waitForLog(#"kodi Input.SendText {"done": false, "text": "hi"}"#)
             link.send(Key.home, r.add)
             try await waitFor("keyboard") { keyboard != nil }
